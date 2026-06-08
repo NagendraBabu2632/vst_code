@@ -1,0 +1,9 @@
+/* AreaChart component styles */
+
+.d3-area-wrap {
+  width: 100%;
+}
+
+.d3-area-wrap circle {
+  cursor: pointer;
+}

@@ -1,0 +1,11 @@
+/* Shared styles for the Dropdown component.
+   Keeps presentation consistent across pages without altering existing UI. */
+
+.dropdown-trigger {
+  background-color: var(--card);
+  border-color: var(--border);
+}
+
+.dropdown-content {
+  /* Inherits from underlying Select primitive; hook left for future overrides. */
+}

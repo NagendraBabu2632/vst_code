@@ -1,0 +1,256 @@
+/* =========================================================
+   AssetFilter – BEM component styles
+   All colour tokens map to CSS custom properties defined
+   globally (--primary, --border, --card, --muted,
+   --muted-foreground, --foreground, --primary-foreground).
+   ========================================================= */
+
+/* ----- Trigger button ----- */
+.asset-filter__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;          /* gap-2 */
+  height: 2.25rem;      /* h-9 */
+  padding: 0 0.75rem;   /* px-3 */
+}
+
+.asset-filter__trigger-icon {
+  height: 0.875rem;     /* h-3.5 */
+  width: 0.875rem;      /* w-3.5 */
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.asset-filter__trigger-label {
+  font-size: 0.875rem;  /* text-sm */
+  font-weight: 500;     /* font-medium */
+}
+
+.asset-filter__summary {
+  font-size: 0.75rem;   /* text-xs */
+  padding: 0.125rem 0.5rem; /* py-0.5 px-2 */
+  border-radius: 9999px;    /* rounded-full */
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.asset-filter__chevron {
+  height: 0.875rem;
+  width: 0.875rem;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+/* ----- Popover content shell ----- */
+.asset-filter__content {
+  width: 26.25rem;      /* w-[420px] */
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ----- Header bar ----- */
+.asset-filter__header {
+  padding: 0.625rem 1rem; /* py-2.5 px-4 */
+  background-color: color-mix(in srgb, var(--muted) 40%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+
+.asset-filter__header-label {
+  font-size: 0.625rem;        /* text-[10px] */
+  font-weight: 600;           /* font-semibold */
+  text-transform: uppercase;
+  letter-spacing: 0.08em;     /* tracking-wider */
+  color: var(--muted-foreground);
+}
+
+/* ----- Search section ----- */
+.asset-filter__search {
+  padding: 0.75rem;           /* p-3 */
+  border-bottom: 1px solid var(--border);
+}
+
+.asset-filter__search-wrapper {
+  position: relative;
+}
+
+.asset-filter__search-icon {
+  position: absolute;
+  left: 0.625rem;             /* left-2.5 */
+  top: 50%;
+  transform: translateY(-50%);
+  height: 0.875rem;
+  width: 0.875rem;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.asset-filter__search-input {
+  height: 2.25rem;            /* h-9 */
+  padding-left: 2rem;         /* pl-8 */
+  font-size: 0.875rem;        /* text-sm */
+  background-color: var(--card);
+  width: 100%;
+}
+
+/* ----- Tree section ----- */
+.asset-filter__tree {
+  max-height: 21.25rem;       /* max-h-[340px] */
+  overflow: auto;
+  padding: 0.25rem 0;         /* py-1 */
+}
+
+/* ----- Unit row ----- */
+.asset-filter__unit {
+  user-select: none;
+}
+
+.asset-filter__unit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;                /* gap-2 */
+  padding: 0.5rem 0.75rem;    /* py-2 px-3 */
+  cursor: default;
+}
+
+.asset-filter__unit-row:hover {
+  background-color: color-mix(in srgb, var(--muted) 50%, transparent);
+}
+
+.asset-filter__unit-name {
+  font-size: 0.875rem;        /* text-sm */
+  font-weight: 600;           /* font-semibold */
+}
+
+.asset-filter__unit-count {
+  font-size: 0.6875rem;       /* text-[11px] */
+  color: var(--muted-foreground);
+  margin-left: 0.25rem;       /* ml-1 */
+}
+
+.asset-filter__factory-icon {
+  height: 0.875rem;
+  width: 0.875rem;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* ----- Expand/collapse button (shared by unit & line rows) ----- */
+.asset-filter__expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.125rem;          /* p-0.5 */
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.asset-filter__expand-btn:hover {
+  color: var(--foreground);
+}
+
+.asset-filter__expand-icon {
+  height: 0.875rem;
+  width: 0.875rem;
+}
+
+/* ----- Line group ----- */
+.asset-filter__line-group {
+  margin-left: 1.25rem;       /* ml-5 */
+  border-left: 1px solid var(--border);
+}
+
+/* ----- Line row ----- */
+.asset-filter__line-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;                /* gap-2 */
+  padding: 0.375rem 0.75rem;  /* py-1.5 pl-3 pr-3 */
+  cursor: default;
+}
+
+.asset-filter__line-row:hover {
+  background-color: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
+.asset-filter__line-name {
+  font-size: 0.875rem;        /* text-sm */
+}
+
+.asset-filter__line-count {
+  font-size: 0.6875rem;       /* text-[11px] */
+  color: var(--muted-foreground);
+  margin-left: 0.25rem;       /* ml-1 */
+}
+
+/* ----- Machine group ----- */
+.asset-filter__machine-group {
+  margin-left: 1.25rem;       /* ml-5 */
+  border-left: 1px solid var(--border);
+}
+
+/* ----- Machine row ----- */
+.asset-filter__machine-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;                /* gap-2 */
+  padding: 0.375rem 0.75rem;  /* py-1.5 pl-3 pr-3 */
+  cursor: default;
+}
+
+.asset-filter__machine-row:hover {
+  background-color: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
+.asset-filter__machine-spacer {
+  width: 1rem;                /* w-4 */
+  flex-shrink: 0;
+}
+
+.asset-filter__machine-name {
+  font-size: 0.875rem;        /* text-sm */
+  color: color-mix(in srgb, var(--foreground) 90%, transparent);
+}
+
+/* ----- Empty state ----- */
+.asset-filter__empty {
+  padding: 1.5rem 1rem;       /* py-6 px-4 */
+  text-align: center;
+  font-size: 0.75rem;         /* text-xs */
+  color: var(--muted-foreground);
+}
+
+/* ----- Footer ----- */
+.asset-filter__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;                /* gap-2 */
+  padding: 0.625rem 0.75rem;  /* py-2.5 px-3 */
+  border-top: 1px solid var(--border);
+  background-color: color-mix(in srgb, var(--muted) 30%, transparent);
+}
+
+/* ----- Reset button ----- */
+.asset-filter__reset {
+  font-size: 0.75rem;         /* text-xs */
+  color: var(--muted-foreground);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;    /* py-1 px-2 */
+  line-height: 1;
+}
+
+.asset-filter__reset:hover {
+  color: var(--foreground);
+}
+
+/* ----- Apply button ----- */
+.asset-filter__apply {
+  height: 2rem;               /* h-8 */
+}

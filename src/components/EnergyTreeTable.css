@@ -1,0 +1,306 @@
+.energy-view-toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  margin-bottom: 0.75rem;
+  background: color-mix(in oklab, var(--muted) 50%, var(--card));
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+}
+.energy-view-toggle-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.energy-view-toggle-btn:hover { color: var(--foreground); }
+.energy-view-toggle-btn.is-active {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.energy-tree-wrap {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.energy-tree-scroll {
+  overflow: auto;
+  max-height: 70vh;
+}
+
+.energy-tree-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.78rem;
+  font-family: var(--font-sans);
+}
+
+.energy-tree-th,
+.energy-tree-td {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  white-space: nowrap;
+  background: var(--card);
+  vertical-align: middle;
+}
+
+.energy-tree-th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  font-weight: 600;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--muted) 85%, var(--card));
+  text-align: right;
+}
+
+.energy-tree-th-hour { text-align: right; min-width: 96px; }
+.energy-tree-td-hour {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--foreground);
+}
+.energy-tree-th-hour.is-even,
+.energy-tree-td-hour.is-even {
+  background: color-mix(in oklab, var(--muted) 25%, var(--card));
+}
+
+/* Sticky columns: Item + Total */
+.energy-tree-col-item {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 140px;
+  text-align: left;
+  background: var(--card);
+}
+.energy-tree-col-total {
+  position: sticky;
+  left: 140px;
+  z-index: 1;
+  min-width: 160px;
+  text-align: right;
+  background: var(--card);
+  box-shadow: 1px 0 0 var(--border);
+}
+.energy-tree-th.energy-tree-col-item { z-index: 3; text-align: left; }
+.energy-tree-th.energy-tree-col-total { z-index: 3; }
+
+/* Item cell */
+.energy-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: var(--tree-indent, 0px);
+}
+.energy-tree-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: transform 0.18s, background-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.energy-tree-caret:hover { background: var(--muted); color: var(--foreground); }
+.energy-tree-caret svg { width: 14px; height: 14px; }
+.energy-tree-caret.is-open { transform: rotate(90deg); }
+.energy-tree-caret--placeholder { cursor: default; }
+.energy-tree-caret--placeholder:hover { background: transparent; }
+
+.energy-tree-name { font-weight: 500; }
+
+.energy-tree-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid color-mix(in oklab, var(--primary) 25%, transparent);
+}
+
+/* Total column */
+.energy-tree-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+.energy-tree-total-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+.energy-tree-total-bar {
+  display: block;
+  width: 100px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--muted) 70%, transparent);
+  overflow: hidden;
+}
+.energy-tree-total-bar-fill {
+  display: block;
+  height: 100%;
+  width: var(--bar-fill-pct, 0%);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 60%, transparent), var(--primary));
+  border-radius: inherit;
+}
+
+/* Hierarchy row colors */
+.energy-tree-row { cursor: default; transition: background-color 0.12s; }
+
+.energy-tree-row--unit .energy-tree-td {
+  background: color-mix(in oklab, var(--primary) 8%, var(--card));
+  font-weight: 600;
+}
+.energy-tree-row--unit .energy-tree-td-hour.is-even {
+  background: color-mix(in oklab, var(--primary) 12%, var(--card));
+}
+.energy-tree-row--unit .energy-tree-name { font-size: 0.85rem; }
+
+.energy-tree-row--line .energy-tree-td {
+  background: color-mix(in oklab, var(--muted) 55%, var(--card));
+}
+.energy-tree-row--line .energy-tree-td-hour.is-even {
+  background: color-mix(in oklab, var(--muted) 75%, var(--card));
+}
+
+.energy-tree-row--asset { cursor: pointer; }
+.energy-tree-row--asset .energy-tree-name { color: var(--muted-foreground); font-weight: 500; }
+.energy-tree-row--asset:hover .energy-tree-td {
+  background: color-mix(in oklab, var(--accent) 30%, var(--card));
+}
+.energy-tree-row--asset:hover .energy-tree-td-hour.is-even {
+  background: color-mix(in oklab, var(--accent) 38%, var(--card));
+}
+
+.energy-tree-row--asset.is-selected .energy-tree-td {
+  background: color-mix(in oklab, var(--primary) 18%, var(--card));
+}
+.energy-tree-row--asset.is-selected .energy-tree-name { color: var(--foreground); font-weight: 600; }
+
+/* ── Trend panel ─────────────────────────────────────────────────── */
+.energy-trend-panel {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  padding: 1rem 1.25rem 1.25rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.energy-trend-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.energy-trend-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.energy-trend-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.25rem 0 0.3rem;
+  color: var(--foreground);
+}
+
+/* Stats: Min / Max / Average / Total */
+.energy-trend-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.energy-trend-stats strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+/* Right-side controls: chart-type toggles + close */
+.energy-trend-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.energy-trend-chart-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+.energy-trend-chart-btn:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.energy-trend-chart-btn.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.energy-trend-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.energy-trend-close:hover { background: var(--muted); color: var(--foreground); }
+
+.energy-trend-chart-wrap { width: 100%; }
+.energy-trend-svg { display: block; width: 100%; height: auto; }

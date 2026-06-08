@@ -1,0 +1,129 @@
+/* KpiCard component */
+
+.kpi-card {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-shadow: var(--shadow-md);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.kpi-card--clickable {
+  cursor: pointer;
+}
+
+.kpi-card--clickable:hover {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  box-shadow: var(--shadow-md), 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.kpi-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
+}
+
+.kpi-card__title {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.kpi-card__icon-wrap {
+  padding: 0.375rem;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kpi-card__icon-wrap svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* Icon color variants */
+.kpi-card__icon-wrap--primary { background-color: color-mix(in srgb, var(--primary) 12%, transparent); }
+.kpi-card__icon-wrap--primary svg { color: var(--primary); }
+
+.kpi-card__icon-wrap--success { background-color: color-mix(in srgb, var(--success) 12%, transparent); }
+.kpi-card__icon-wrap--success svg { color: var(--success); }
+
+.kpi-card__icon-wrap--warning { background-color: color-mix(in srgb, var(--warning) 12%, transparent); }
+.kpi-card__icon-wrap--warning svg { color: var(--warning); }
+
+.kpi-card__icon-wrap--critical { background-color: color-mix(in srgb, var(--critical) 12%, transparent); }
+.kpi-card__icon-wrap--critical svg { color: var(--critical); }
+
+.kpi-card__icon-wrap--info { background-color: color-mix(in srgb, var(--info, var(--primary)) 12%, transparent); }
+.kpi-card__icon-wrap--info svg { color: var(--info, var(--primary)); }
+
+.kpi-card__icon-wrap--solar { background-color: color-mix(in srgb, var(--chart-solar) 12%, transparent); }
+.kpi-card__icon-wrap--solar svg { color: var(--chart-solar); }
+
+.kpi-card__icon-wrap--diesel { background-color: color-mix(in srgb, var(--chart-diesel) 12%, transparent); }
+.kpi-card__icon-wrap--diesel svg { color: var(--chart-diesel); }
+
+.kpi-card__icon-wrap--grid { background-color: color-mix(in srgb, var(--chart-grid) 12%, transparent); }
+.kpi-card__icon-wrap--grid svg { color: var(--chart-grid); }
+
+.kpi-card__icon-wrap--moisture { background-color: color-mix(in srgb, var(--chart-moisture) 12%, transparent); }
+.kpi-card__icon-wrap--moisture svg { color: var(--chart-moisture); }
+
+.kpi-card__icon-wrap--humidity { background-color: color-mix(in srgb, var(--chart-humidity) 12%, transparent); }
+.kpi-card__icon-wrap--humidity svg { color: var(--chart-humidity); }
+
+/* Value row */
+.kpi-card__value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.kpi-card__value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--foreground);
+  line-height: 1.2;
+}
+
+.kpi-card__unit {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.kpi-card__subtitle {
+  font-size: 0.625rem;
+  color: var(--muted-foreground);
+  font-style: italic;
+  margin-top: 0.125rem;
+}
+
+/* Trend */
+.kpi-card__trend {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.kpi-card__trend-value {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.kpi-card__trend-value--up { color: var(--success); }
+.kpi-card__trend-value--down { color: var(--critical); }
+
+.kpi-card__trend-label {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}

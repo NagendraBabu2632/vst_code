@@ -1,0 +1,22 @@
+.d3-tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  background: var(--card, hsl(220, 18%, 14%));
+  color: var(--foreground, #fff);
+  border: 1px solid var(--border, hsl(220, 14%, 22%));
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  max-width: 260px;
+}
+.d3-tooltip.is-visible { opacity: 1; }
+.d3-tooltip strong { font-weight: 600; }
+.d3-tooltip .d3-tt-muted { color: var(--muted-foreground, hsl(215, 15%, 65%)); font-size: 11px; }
+.d3-tooltip .d3-tt-name { font-weight: 600; margin-bottom: 2px; }
+.d3-tooltip .d3-tt-up { color: hsl(142, 70%, 50%); }
+.d3-tooltip .d3-tt-down { color: hsl(0, 75%, 60%); }

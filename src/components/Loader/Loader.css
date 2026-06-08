@@ -1,0 +1,43 @@
+/* Loader component */
+
+.loader-fullscreen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--background);
+  z-index: 9999;
+}
+
+.loader-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.loader__spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  animation: loader-spin 0.7s linear infinite;
+}
+
+.loader__spinner--sm {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-width: 2px;
+}
+
+.loader__spinner--lg {
+  width: 4rem;
+  height: 4rem;
+  border-width: 4px;
+}
+
+@keyframes loader-spin {
+  to { transform: rotate(360deg); }
+}
