@@ -1,5 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import { BarChart2, ChevronRight, LineChart, TrendingUp, X } from "lucide-react";
+import * as d3 from "d3";
+import { useChartSize } from "@/components/charts/useChartSize";
+import "@/components/charts/tooltip.css";
 import { HOUR_LABELS, energyTree, sumHourly, type EnergyTreeAsset, type EnergyTreeLine, type EnergyTreeUnit } from "@/data/energyTreeData";
 import "./EnergyTreeTable.css";
 
@@ -77,38 +80,66 @@ function toDayValues(id: string, hourly: number[], n: number): number[] {
   });
 }
 
-// Inline trend chart shown when an asset is selected (hourly trend)
+// Inline trend chart shown when an asset is selected — D3-powered, responsive
 const AssetTrendChart = ({ asset, onClose }: { asset: EnergyTreeAsset; onClose: () => void }) => {
   const [chartType, setChartType] = useState<"line" | "bar">("line");
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const { ref: chartWrapRef, width } = useChartSize<HTMLDivElement>(760);
 
-  const w = 760, h = 240;
-  const m = { top: 16, right: 16, bottom: 32, left: 40 };
-  const innerW = w - m.left - m.right;
-  const innerH = h - m.top - m.bottom;
+  const H = 240;
+  const ML = 44, MR = 16, MT = 16, MB = 32;
+  const innerW = Math.max(width - ML - MR, 0);
+  const innerH = H - MT - MB;
   const data = asset.hourly;
 
-  // Stats
-  const totalKwh = sumArr(data);
-  const minVal = Math.min(...data);
-  const maxVal = Math.max(...data);
-  const avgVal = +(data.reduce((s, v) => s + v, 0) / data.length).toFixed(1);
+  const totalKwh = useMemo(() => sumArr(data), [data]);
+  const minVal = useMemo(() => Math.min(...data), [data]);
+  const maxVal = useMemo(() => Math.max(...data), [data]);
+  const avgVal = useMemo(() => +(data.reduce((s, v) => s + v, 0) / data.length).toFixed(1), [data]);
 
-  // Y scale (always starts at 0)
-  const yMax = maxVal * 1.1 || 1;
-  const yFor = (v: number) => innerH - (v / yMax) * innerH;
-  const yTicks = 4;
+  const { yScale, xLine, xBar, linePath, areaPath, yTicks } = useMemo(() => {
+    const yScale = d3.scaleLinear()
+      .domain([0, (d3.max(data) ?? 0) * 1.1 || 1])
+      .nice()
+      .range([innerH, 0]);
 
-  // Line chart
-  const xFor = (i: number) => (i / (data.length - 1)) * innerW;
-  const linePts = data.map((v, i) => `${xFor(i)},${yFor(v)}`).join(" ");
-  const areaPts = `0,${innerH} ${linePts} ${innerW},${innerH}`;
+    const indices = data.map((_, i) => i);
+    const xLine = d3.scalePoint<number>().domain(indices).range([0, innerW]);
+    const xBar = d3.scaleBand<number>().domain(indices).range([0, innerW]).padding(0.08);
 
-  // Bar / histogram
-  const slotW = innerW / data.length;
-  const barGap = 2;
-  const barW = slotW - barGap;
-  const barX = (i: number) => i * slotW + barGap / 2;
+    const lineGen = d3.line<number>()
+      .x((_, i) => xLine(i) ?? 0)
+      .y((v) => yScale(v))
+      .curve(d3.curveMonotoneX);
+
+    const areaGen = d3.area<number>()
+      .x((_, i) => xLine(i) ?? 0)
+      .y0(innerH)
+      .y1((v) => yScale(v))
+      .curve(d3.curveMonotoneX);
+
+    return {
+      yScale,
+      xLine,
+      xBar,
+      linePath: lineGen(data) ?? "",
+      areaPath: areaGen(data) ?? "",
+      yTicks: yScale.ticks(4),
+    };
+  }, [data, innerW, innerH]);
+
+  const showTip = useCallback((e: { clientX: number; clientY: number }, label: string, value: number) => {
+    const tip = tooltipRef.current;
+    if (!tip) return;
+    tip.innerHTML = `<div class="d3-tt-name">${label}</div><div>${fmt(value)} kWh</div>`;
+    tip.style.left = `${e.clientX + 12}px`;
+    tip.style.top = `${e.clientY - 28}px`;
+    tip.classList.add("is-visible");
+  }, []);
+
+  const hideTip = useCallback(() => {
+    tooltipRef.current?.classList.remove("is-visible");
+  }, []);
 
   return (
     <div className="energy-trend-panel">
@@ -148,8 +179,8 @@ const AssetTrendChart = ({ asset, onClose }: { asset: EnergyTreeAsset; onClose: 
         </div>
       </div>
 
-      <div className="energy-trend-chart-wrap">
-        <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="energy-trend-svg">
+      <div className="energy-trend-chart-wrap" ref={chartWrapRef}>
+        <svg height={H} className="energy-trend-svg">
           <defs>
             <linearGradient id="energyTrendFill" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.35" />
@@ -157,64 +188,74 @@ const AssetTrendChart = ({ asset, onClose }: { asset: EnergyTreeAsset; onClose: 
             </linearGradient>
           </defs>
 
-          <g transform={`translate(${m.left},${m.top})`}>
-            {/* Y-axis gridlines + labels */}
-            {Array.from({ length: yTicks + 1 }, (_, i) => {
-              const v = (yMax / yTicks) * i;
-              const y = yFor(v);
+          <g transform={`translate(${ML},${MT})`}>
+            {/* Y gridlines + labels */}
+            {yTicks.map((v) => {
+              const y = yScale(v);
               return (
-                <g key={i}>
+                <g key={v}>
                   <line x1={0} x2={innerW} y1={y} y2={y} stroke="var(--border)" strokeDasharray="3 3" />
-                  <text x={-8} y={y} dy={4} fontSize={10} textAnchor="end" fill="var(--muted-foreground)">
-                    {Math.round(v)}
-                  </text>
+                  <text x={-8} y={y} dy={4} fontSize={10} textAnchor="end" fill="var(--muted-foreground)">{v}</text>
                 </g>
               );
             })}
 
-            {/* ── Line chart ────────────────────────────────── */}
+            {/* Line chart */}
             {chartType === "line" && (
               <>
-                <polygon points={areaPts} fill="url(#energyTrendFill)" />
-                <polyline points={linePts} fill="none" stroke="var(--primary)" strokeWidth={2} />
+                <path d={areaPath} fill="url(#energyTrendFill)" />
+                <path d={linePath} fill="none" stroke="var(--primary)" strokeWidth={2} />
                 {data.map((v, i) => (
-                  <circle key={i} cx={xFor(i)} cy={yFor(v)} r={2.5} fill="var(--primary)">
-                    <title>{`${HOUR_LABELS[i]}: ${fmt(v)} kWh`}</title>
-                  </circle>
+                  <circle
+                    key={i}
+                    cx={xLine(i) ?? 0}
+                    cy={yScale(v)}
+                    r={3}
+                    fill="var(--primary)"
+                    className="energy-trend-data-point"
+                    onMouseMove={(e) => showTip(e, HOUR_LABELS[i], v)}
+                    onMouseLeave={hideTip}
+                  />
                 ))}
               </>
             )}
 
-            {/* ── Histogram / bar chart ─────────────────────── */}
-            {chartType === "bar" && data.map((v, i) => {
-              const isHovered = hoveredIdx === i;
-              return (
-                <rect
-                  key={i}
-                  x={barX(i)}
-                  y={yFor(v)}
-                  width={barW}
-                  height={innerH - yFor(v)}
-                  fill="var(--primary)"
-                  fillOpacity={isHovered ? 1 : 0.22}
-                  stroke="var(--primary)"
-                  strokeOpacity={isHovered ? 1 : 0.55}
-                  strokeWidth={1}
-                  onMouseEnter={() => setHoveredIdx(i)}
-                  onMouseLeave={() => setHoveredIdx(null)}
-                >
-                  <title>{`${HOUR_LABELS[i]}: ${fmt(v)} kWh`}</title>
-                </rect>
-              );
-            })}
+            {/* Histogram / bar chart */}
+            {chartType === "bar" && data.map((v, i) => (
+              <rect
+                key={i}
+                x={xBar(i) ?? 0}
+                y={yScale(v)}
+                width={xBar.bandwidth()}
+                height={innerH - yScale(v)}
+                fill="var(--primary)"
+                fillOpacity={0.22}
+                stroke="var(--primary)"
+                strokeOpacity={0.55}
+                strokeWidth={1}
+                className="energy-trend-data-point"
+                onMouseEnter={(e) => {
+                  (e.currentTarget as SVGRectElement).setAttribute("fill-opacity", "1");
+                  (e.currentTarget as SVGRectElement).setAttribute("stroke-opacity", "1");
+                  showTip(e, HOUR_LABELS[i], v);
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as SVGRectElement).setAttribute("fill-opacity", "0.22");
+                  (e.currentTarget as SVGRectElement).setAttribute("stroke-opacity", "0.55");
+                  hideTip();
+                }}
+              />
+            ))}
 
             {/* X baseline */}
             <line x1={0} x2={innerW} y1={innerH} y2={innerH} stroke="var(--border)" />
 
-            {/* X-axis labels */}
+            {/* X-axis labels — every 3rd hour */}
             {HOUR_LABELS.map((label, i) => {
               if (i % 3 !== 0) return null;
-              const x = chartType === "line" ? xFor(i) : barX(i) + barW / 2;
+              const x = chartType === "line"
+                ? (xLine(i) ?? 0)
+                : (xBar(i) ?? 0) + xBar.bandwidth() / 2;
               return (
                 <text key={i} x={x} y={innerH + 16} fontSize={10} textAnchor="middle" fill="var(--muted-foreground)">
                   {label.split(" - ")[0]}
@@ -224,6 +265,7 @@ const AssetTrendChart = ({ asset, onClose }: { asset: EnergyTreeAsset; onClose: 
           </g>
         </svg>
       </div>
+      <div ref={tooltipRef} className="d3-tooltip" />
     </div>
   );
 };

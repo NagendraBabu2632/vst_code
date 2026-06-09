@@ -303,4 +303,5 @@
 .energy-trend-close:hover { background: var(--muted); color: var(--foreground); }
 
 .energy-trend-chart-wrap { width: 100%; }
-.energy-trend-svg { display: block; width: 100%; height: auto; }
+.energy-trend-svg { display: block; width: 100%; }
+.energy-trend-data-point { cursor: pointer; }

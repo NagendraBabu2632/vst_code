@@ -93,9 +93,13 @@ export const SPCTimeseriesChart = ({
         <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
           {/* Grid removed per design */}
 
-          {/* SPC zones / sigma bands */}
+          {/* SPC zones — 6 bands bounded by UCL/LCL, divided into 3 equal steps each side */}
           {showSPCRules && sigmaBands && (() => {
-            const { avg: a, sigma: s } = sigmaBands;
+            const a = sigmaBands.avg;
+            const ucl = config.ucl;
+            const lcl = config.lcl;
+            const upStep   = (ucl - a) / 3;
+            const downStep = (a - lcl) / 3;
             const clampY = (v: number) => Math.max(0, Math.min(innerH, y(v)));
             const band = (lo: number, hi: number, fill: string, op: number) => {
               const y1 = clampY(hi); const y2 = clampY(lo);
@@ -103,23 +107,35 @@ export const SPCTimeseriesChart = ({
             };
             return (
               <>
-                {band(a - s, a + s, "hsl(145, 60%, 55%)", 0.22)}
-                {band(a + s, a + 2 * s, "hsl(42, 95%, 55%)", 0.26)}
-                {band(a - 2 * s, a - s, "hsl(42, 95%, 55%)", 0.26)}
-                {band(a + 2 * s, a + 3 * s, "hsl(0, 75%, 60%)", 0.25)}
-                {band(a - 3 * s, a - 2 * s, "hsl(0, 75%, 60%)", 0.25)}
+                {/* Upper side: avg → UCL */}
+                {band(a,               a + upStep,       "hsl(145, 60%, 55%)", 0.22)}
+                {band(a + upStep,      a + 2 * upStep,   "hsl(42,  95%, 55%)", 0.26)}
+                {band(a + 2 * upStep,  ucl,              "hsl(0,   75%, 60%)", 0.25)}
+                {/* Lower side: LCL → avg */}
+                {band(a - downStep,    a,                "hsl(145, 60%, 55%)", 0.22)}
+                {band(a - 2*downStep,  a - downStep,     "hsl(42,  95%, 55%)", 0.26)}
+                {band(lcl,             a - 2*downStep,   "hsl(0,   75%, 60%)", 0.25)}
               </>
             );
           })()}
-          {showSPCRules && !sigmaBands && (
-            <>
-              <rect x={0} y={y(config.yDomain[1])} width={innerW} height={Math.max(0, y(config.usl) - y(config.yDomain[1]))} fill="hsl(0, 75%, 55%)" fillOpacity={0.28} />
-              <rect x={0} y={y(config.lsl)} width={innerW} height={Math.max(0, y(config.yDomain[0]) - y(config.lsl))} fill="hsl(0, 75%, 55%)" fillOpacity={0.28} />
-              <rect x={0} y={y(config.usl)} width={innerW} height={Math.max(0, y(config.ucl) - y(config.usl))} fill="hsl(42, 95%, 55%)" fillOpacity={0.26} />
-              <rect x={0} y={y(config.lcl)} width={innerW} height={Math.max(0, y(config.lsl) - y(config.lcl))} fill="hsl(42, 95%, 55%)" fillOpacity={0.26} />
-              <rect x={0} y={y(config.ucl)} width={innerW} height={Math.max(0, y(config.lcl) - y(config.ucl))} fill="hsl(145, 70%, 45%)" fillOpacity={0.20} />
-            </>
-          )}
+          {showSPCRules && !sigmaBands && (() => {
+            const cy = (v: number) => Math.max(0, Math.min(innerH, y(v)));
+            return (
+              <>
+                {/* Zone A: UCL→USL and LSL→LCL (red) */}
+                <rect x={0} y={cy(config.ucl)} width={innerW} height={Math.max(0, cy(config.usl) - cy(config.ucl))} fill="hsl(0, 78%, 58%)"   fillOpacity={0.15} />
+                <rect x={0} y={cy(config.lsl)} width={innerW} height={Math.max(0, cy(config.lcl) - cy(config.lsl))} fill="hsl(0, 78%, 58%)"   fillOpacity={0.15} />
+                {/* Zone B: avg→UCL and LCL→avg (yellow) */}
+                <rect x={0} y={cy(config.ucl)} width={innerW} height={Math.max(0, cy(avg)        - cy(config.ucl))} fill="hsl(42, 95%, 55%)"  fillOpacity={0.18} />
+                <rect x={0} y={cy(avg)}        width={innerW} height={Math.max(0, cy(config.lcl) - cy(avg))}        fill="hsl(42, 95%, 55%)"  fillOpacity={0.18} />
+                {/* Zone C inner ±1σ is not separately available without sigmaBands — UCL/LCL act as outer boundary */}
+                {/* Dividers */}
+                <line x1={0} x2={innerW} y1={cy(config.ucl)} y2={cy(config.ucl)} stroke="hsl(215,20%,50%)" strokeWidth={0.75} strokeDasharray="3 4" opacity={0.55} />
+                <line x1={0} x2={innerW} y1={cy(avg)}        y2={cy(avg)}        stroke="hsl(215,20%,50%)" strokeWidth={0.75} strokeDasharray="3 4" opacity={0.55} />
+                <line x1={0} x2={innerW} y1={cy(config.lcl)} y2={cy(config.lcl)} stroke="hsl(215,20%,50%)" strokeWidth={0.75} strokeDasharray="3 4" opacity={0.55} />
+              </>
+            );
+          })()}
 
           {/* Reference lines */}
           {showLimits && [

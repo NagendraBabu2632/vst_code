@@ -242,7 +242,7 @@ export const AssetEnergyBarChart = ({ data, mode }: AssetEnergyBarChartProps) =>
 };
 
 /* ============================================================
- * SPC Histogram (vertical bars + LSL/USL ref lines)
+ * SPC Histogram (vertical bars, frequency distribution)
  * ========================================================== */
 
 interface HistogramBin { range: number; count: number; binStart: number; binEnd: number; }
@@ -251,17 +251,17 @@ interface SPCHistogramChartProps {
   data: HistogramBin[];
   lineColor: string;
   unit: string;
-  lsl: number;
-  usl: number;
-  showLimits: boolean;
-  /** Kept for API compatibility; D3 renders its own tooltip. */
+  lsl?: number;
+  usl?: number;
+  showLimits?: boolean;
+  /** Kept for API compatibility; not rendered. */
   tooltip?: ReactElement;
 }
 
 const HIST_HEIGHT = 320;
-const HIST_MARGIN = { top: 16, right: 50, bottom: 32, left: 40 };
+const HIST_MARGIN = { top: 16, right: 20, bottom: 32, left: 40 };
 
-export const SPCHistogramChart = ({ data, lineColor, unit, lsl, usl, showLimits }: SPCHistogramChartProps) => {
+export const SPCHistogramChart = ({ data, lineColor, unit, lsl, usl, showLimits = true }: SPCHistogramChartProps) => {
   const { ref, width } = useChartSize(700);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
@@ -270,12 +270,6 @@ export const SPCHistogramChart = ({ data, lineColor, unit, lsl, usl, showLimits 
 
   const x = useMemo(
     () => d3.scaleBand<string>().domain(data.map((d) => String(d.range))).range([0, innerW]).padding(0.1),
-    [data, innerW]
-  );
-  const xLinear = useMemo(
-    () => d3.scaleLinear()
-      .domain([d3.min(data, (d) => d.binStart) ?? 0, d3.max(data, (d) => d.binEnd) ?? 1])
-      .range([0, innerW]),
     [data, innerW]
   );
   const y = useMemo(
@@ -318,15 +312,6 @@ export const SPCHistogramChart = ({ data, lineColor, unit, lsl, usl, showLimits 
               />
             );
           })}
-          {showLimits && [
-            { v: lsl, label: "LSL" },
-            { v: usl, label: "USL" },
-          ].map((r) => (
-            <g key={r.label}>
-              <line x1={xLinear(r.v)} x2={xLinear(r.v)} y1={0} y2={innerH} stroke="hsl(0, 72%, 55%)" strokeWidth={1.5} strokeDasharray="6 3" />
-              <text x={xLinear(r.v)} y={-4} textAnchor="middle" fontSize={9} fill="hsl(0, 72%, 55%)">{r.label}</text>
-            </g>
-          ))}
           {/* Y axis */}
           <line y1={0} y2={innerH} stroke={axisStroke} />
           {yTicks.map((t) => (
