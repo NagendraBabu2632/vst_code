@@ -8,8 +8,8 @@ import { format } from "date-fns";
 import { kpiData, energyTrendData, equipmentEnergyData, alertsData } from "@/data/mockData";
 import { Zap, IndianRupee, Gauge, Droplets, Wind, AlertTriangle, Trophy, TrendingUp, TrendingDown, BarChart3, Table2, Factory } from "lucide-react";
 import { motion } from "framer-motion";
-import { EnergyTrendAreaChart } from "@/components/charts/AreaChart";
-import { Top5BarChart } from "@/components/charts/BarChart";
+import { EnergyTrendAreaChart } from "../../components/charts/AreaChart/AreaChart";
+import { Top5BarChart } from "../../components/charts/BarChart/BarChart";
 
 const totalConsumption = equipmentEnergyData.reduce((s, e) => s + e.consumption, 0);
 const totalCost = equipmentEnergyData.reduce((s, e) => s + e.cost, 0);
@@ -195,8 +195,8 @@ const ExecutiveSummary = () => {
               <button onClick={() => setTop5Mode("cost")} className={top5Mode === "cost" ? "is-active" : ""}>₹ Cost</button>
             </div>
             <div className="exec-top5-pill exec-top5-iconpill">
-              <button onClick={() => setTop5View("chart")} className={top5View === "chart" ? "is-active" : ""}><BarChart3 /></button>
-              <button onClick={() => setTop5View("table")} className={top5View === "table" ? "is-active" : ""}><Table2 /></button>
+              <button onClick={() => setTop5View("chart")} className={top5View === "chart" ? "is-active" : ""} aria-label="Chart view"><BarChart3 /></button>
+              <button onClick={() => setTop5View("table")} className={top5View === "table" ? "is-active" : ""} aria-label="Table view"><Table2 /></button>
             </div>
           </div>
         </div>

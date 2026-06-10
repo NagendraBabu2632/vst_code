@@ -8,8 +8,8 @@ import { Droplets, Thermometer, Wind, BarChart3, TrendingUp, Download, Eye, EyeO
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { format, subDays, startOfMonth } from "date-fns";
-import { SPCTimeseriesChart, type SPCLineConfig } from "@/components/charts/LineChart";
-import { SPCHistogramChart } from "@/components/charts/BarChart";
+import { SPCTimeseriesChart, type SPCLineConfig } from "../../components/charts/LineChart/LineChart";
+import { SPCHistogramChart } from "../../components/charts/BarChart/BarChart";
 
 const calcStats = (values: number[], _target: number, lsl: number, usl: number) => {
   const n = values.length;

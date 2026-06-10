@@ -468,7 +468,7 @@ const SettingsPage = () => {
                 <Upload />
                 <p>Upload production data file</p>
                 <p className="small">Accepted formats: CSV, XLSX, XLS</p>
-                <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
+                <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} aria-label="Upload production data file" />
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                   <Upload className="settings-upload-icon" />Select File
                 </Button>
@@ -504,7 +504,7 @@ const SettingsPage = () => {
                   <Upload className="settings-ec-card-upload-icon" />
                   <p>Upload completed template</p>
                   <p className="settings-ec-card-desc">Accepted: CSV, XLSX, XLS</p>
-                  <input id="ec-losses-file" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
+                  <input id="ec-losses-file" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} aria-label="Upload electricity consumption losses file" />
                   <Button variant="outline" size="sm" onClick={() => document.getElementById("ec-losses-file")?.click()}>
                     <Upload /> Select File
                   </Button>
@@ -776,7 +776,7 @@ const AlertConfigurator = () => {
                 {draft.emails.map((e) => (
                   <Badge key={e} variant="outline" className="settings-chip">
                     {e}
-                    <button onClick={() => removeEmail(e)} className="settings-chip-remove">
+                    <button onClick={() => removeEmail(e)} className="settings-chip-remove" aria-label="Remove email recipient">
                       <X className="settings-chip-remove-icon" />
                     </button>
                   </Badge>
@@ -817,7 +817,7 @@ const AlertConfigurator = () => {
                         {draft.daily.users.map((u) => (
                           <Badge key={u} variant="outline" className="settings-chip">
                             {u}
-                            <button onClick={() => removeDailyUser(u)} className="settings-chip-remove">
+                            <button onClick={() => removeDailyUser(u)} className="settings-chip-remove" aria-label="Remove daily recipient">
                               <X className="settings-chip-remove-icon" />
                             </button>
                           </Badge>
@@ -848,7 +848,7 @@ const AlertConfigurator = () => {
                         {draft.shiftWise.users.map((u) => (
                           <Badge key={u} variant="outline" className="settings-chip">
                             {u}
-                            <button onClick={() => removeShiftUser(u)} className="settings-chip-remove">
+                            <button onClick={() => removeShiftUser(u)} className="settings-chip-remove" aria-label="Remove shift recipient">
                               <X className="settings-chip-remove-icon" />
                             </button>
                           </Badge>
