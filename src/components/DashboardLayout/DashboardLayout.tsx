@@ -7,7 +7,9 @@ import ThemeToggle from "@/components/ThemeToggle/ThemeToggle";
 import UserProfileDropdown from "@/components/UserProfileDropdown/UserProfileDropdown";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import vstLogo from "@/assets/vst_logo.png";
+import darkLogo from "@/assets/VST_Logo.png";
+import lightLogo from "@/assets/lightthemelogo.png";
+import { useAppSelector } from "@/redux/hooks/reduxHooks";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -27,12 +29,14 @@ const SETTINGS_TABS = [
 const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const theme = useAppSelector((s) => s.theme.theme);
+  const logo = theme === "dark" ? darkLogo : lightLogo;
 
   return (
     <div className="layout">
       <header className="layout__header">
         <div className="layout__header-left">
-          <img src={vstLogo} alt="VST" className="layout__brand-logo" />
+          <img src={logo} alt="VST" className="layout__brand-logo" />
           <span className="layout__brand-name">Digital Factory System</span>
         </div>
 

@@ -28,7 +28,7 @@ export const EnergyTrendAreaChart = ({ data }: EnergyTrendAreaChartProps) => {
   const innerH = HEIGHT - MARGIN.top - MARGIN.bottom;
 
   const x = useMemo(
-    () => d3.scalePoint<string>().domain(data.map((d) => d.time)).range([0, innerW]).padding(0.5),
+    () => d3.scalePoint<string>().domain(data.map((d) => d.time)).range([0, innerW]).padding(0),
     [data, innerW]
   );
   const y = useMemo(
