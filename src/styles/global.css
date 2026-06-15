@@ -120,6 +120,8 @@
 html {
   line-height: 1.5;
   -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   tab-size: 4;
 }
 
@@ -354,3 +356,32 @@ p { line-height: 1.6; }
 
 /* Shrink */
 .shrink-0 { flex-shrink: 0; }
+
+/* ===================== PAGE TITLE & HEADER ROW ===================== */
+
+/* Page title shown within the content area of each page */
+.page-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--foreground);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Wraps page title + filter bar for pages with many filters (stacked layout).
+   Keeps the title visually attached to the filters with a tight gap,
+   separate from the 1.5rem gap used between major content sections. */
+.page-header-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* On small screens, always stack title above filters */
+@media (max-width: 639px) {
+  .exec-filter-bar,
+  .energy-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

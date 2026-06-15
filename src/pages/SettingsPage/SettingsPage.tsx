@@ -162,8 +162,9 @@ const SettingsPage = () => {
   const activeTab = urlTab && validTabs.includes(urlTab) ? urlTab : "sku";
 
   return (
-    <DashboardLayout title="Settings">
+    <DashboardLayout>
       <div className="settings-page">
+          <h2 className="page-title">Settings</h2>
           {activeTab === "sku" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
               <div className="settings-section-head"><Package /><h3 className="settings-section-title">Family Configuration</h3></div>
@@ -676,7 +677,7 @@ const AlertConfigurator = () => {
               <th className="text-left">Name</th>
               <th className="text-left">Scope</th>
               <th className="text-left">Parameter</th>
-              <th className="text-left">LCL/UCL</th>
+              <th className="text-left">LSL/USL</th>
               <th className="text-left">Severity</th>
               <th className="text-left">Recipients</th>
               <th className="text-left">Status</th>
@@ -751,7 +752,7 @@ const AlertConfigurator = () => {
             </div>
             <div className="settings-label-checkbox-row settings-field">
               <Checkbox id="useLimits" checked={draft.useLimits} onCheckedChange={(v) => setDraft({ ...draft, useLimits: v === true })} />
-              <Label htmlFor="useLimits" className="settings-checkbox-label">LCL/UCL</Label>
+              <Label htmlFor="useLimits" className="settings-checkbox-label">LSL/USL</Label>
             </div>
 
             <div className="settings-field">

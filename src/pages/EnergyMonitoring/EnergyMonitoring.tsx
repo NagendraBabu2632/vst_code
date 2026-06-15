@@ -21,8 +21,9 @@ const EnergyMonitoring = () => {
   const [shift, setShift] = useState<string>("All Shifts");
 
   return (
-    <DashboardLayout title="Energy Monitoring & Efficiency">
+    <DashboardLayout>
       <div className="energy-topbar">
+        <h2 className="page-title">Energy Monitoring &amp; Efficiency</h2>
         <div className="energy-topbar-right">
           <div className="energy-field">
             <label className="energy-field-label">Period</label>

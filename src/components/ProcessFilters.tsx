@@ -84,13 +84,17 @@ const generateRunTimes = (family: string, period: string) => {
 const formatRun = (r: { start: Date; end: Date }) =>
   `${format(r.start, "yyyy-MM-dd HH:mm:ss")} → ${format(r.end, "yyyy-MM-dd HH:mm:ss")}`;
 
-const ProcessFilters = () => {
+interface ProcessFiltersProps {
+  period: string;
+  onPeriodChange: (period: string) => void;
+}
+
+const ProcessFilters = ({ period, onPeriodChange }: ProcessFiltersProps) => {
   const [unit, setUnit] = useState<string>("");
   const [line, setLine] = useState<string>("");
   const [machine, setMachine] = useState<string>("");
   const [parameter, setParameter] = useState<string>("");
   const [family, setFamily] = useState<string>("");
-  const [period, setPeriod] = useState<string>("last7");
   const [runTime, setRunTime] = useState<string>("");
 
   const runTimes = useMemo(() => generateRunTimes(family, period), [family, period]);
@@ -113,7 +117,7 @@ const ProcessFilters = () => {
     setMachine("");
     setParameter("");
     setFamily("");
-    setPeriod("last7");
+    onPeriodChange("last7");
     setRunTime("");
   };
 
@@ -175,7 +179,7 @@ const ProcessFilters = () => {
         <label className="process-filter-label">Period</label>
         <Dropdown
           value={period}
-          onValueChange={(v) => { setPeriod(v); setRunTime(""); }}
+          onValueChange={(v) => { onPeriodChange(v); setRunTime(""); }}
           placeholder="Select period…"
           options={periodOptions.map((p) => ({ value: p.value, label: p.label }))}
         />

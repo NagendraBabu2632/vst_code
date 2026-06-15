@@ -252,8 +252,11 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
 const ProcessAnalysis = () => {
   const [period, setPeriod] = useState<string>("last7");
   return (
-    <DashboardLayout title="Process Analysis">
-      <ProcessFilters period={period} onPeriodChange={setPeriod} />
+    <DashboardLayout>
+      <div className="page-header-row">
+        <h2 className="page-title">Process Analysis</h2>
+        <ProcessFilters period={period} onPeriodChange={setPeriod} />
+      </div>
       <div className="process-list">
         {chartConfigs.map((config, i) => (
           <SPCChart key={config.dataKey} config={config} delay={i * 0.1} period={period} />

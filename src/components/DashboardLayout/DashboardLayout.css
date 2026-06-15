@@ -32,8 +32,8 @@
 
 /* Brand: logo + app name in header */
 .layout__brand-logo {
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: 0.375rem;
   object-fit: cover;
   flex-shrink: 0;
@@ -41,31 +41,13 @@
 }
 
 .layout__brand-name {
-  font-size: 0.875rem;
+  font-size: 1.3rem;
   font-weight: 700;
   color: var(--sidebar-accent-foreground);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-/* Vertical separator between brand and page title */
-.layout__header-sep {
-  display: inline-block;
-  width: 1px;
-  height: 1.25rem;
-  background-color: var(--border);
-  flex-shrink: 0;
-}
-
-.layout__title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--foreground);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .layout__header-right {
   display: flex;

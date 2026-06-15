@@ -7,11 +7,11 @@ import ThemeToggle from "@/components/ThemeToggle/ThemeToggle";
 import UserProfileDropdown from "@/components/UserProfileDropdown/UserProfileDropdown";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import vstLogo from "@/assets/vst-factory-logo.jfif";
+import vstLogo from "@/assets/vst_logo.png";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  title: string;
+  title?: string;
 }
 
 const SETTINGS_TABS = [
@@ -33,9 +33,7 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
       <header className="layout__header">
         <div className="layout__header-left">
           <img src={vstLogo} alt="VST" className="layout__brand-logo" />
-          <span className="layout__brand-name">Digital Factory</span>
-          <span className="layout__header-sep" aria-hidden="true" />
-          <h1 className="layout__title">{title}</h1>
+          <span className="layout__brand-name">Digital Factory System</span>
         </div>
 
         <div className="layout__header-right">

@@ -30,7 +30,7 @@ const UserProfileDropdown = () => {
         <button className="user-profile__trigger" aria-label="User menu">
           <div className="user-profile__avatar">{initials}</div>
           {/* <span className="user-profile__name">{user?.name ?? "User"}</span> */}
-          <ChevronDown className="user-profile__chevron" />
+          {/* <ChevronDown className="user-profile__chevron" /> */}
         </button>
       </PopoverTrigger>
 

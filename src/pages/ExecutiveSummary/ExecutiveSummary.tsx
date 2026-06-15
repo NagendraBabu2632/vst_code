@@ -95,9 +95,9 @@ const ExecutiveSummary = () => {
   const handleMoistureDrillThrough = () => navigate("/process");
 
   return (
-    <DashboardLayout title="Executive Summary">
+    <DashboardLayout>
       <div className="exec-filter-bar">
-        <h2>Dashboard Overview</h2>
+        <h2 className="page-title">Executive Summary</h2>
         <div className="exec-filter-bar-right">
           <ExecutiveFilter value={execFilter} onChange={setExecFilter} />
         </div>

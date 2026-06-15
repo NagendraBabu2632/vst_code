@@ -168,31 +168,34 @@ const AlertsPage = () => {
   };
 
   return (
-    <DashboardLayout title="Alerts Management">
-      <div className="alerts-filters">
-        {[
-          { label: "Unit", value: filterUnit, setter: setFilterUnit, opts: units },
-          { label: "Line", value: filterLine, setter: setFilterLine, opts: lines },
-          { label: "Machine", value: filterMachine, setter: setFilterMachine, opts: machines },
-          { label: "Parameter", value: filterParam, setter: setFilterParam, opts: parameters },
-          { label: "Period", value: filterPeriod, setter: setFilterPeriod, opts: periods },
-        ].map((f) => (
-          <div key={f.label} className="alerts-filter">
-            <label className="alerts-filter-label">{f.label}</label>
-            <Dropdown value={f.value} onValueChange={f.setter} options={f.opts} />
+    <DashboardLayout>
+      <div className="page-header-row">
+        <h2 className="page-title">Alerts Management</h2>
+        <div className="alerts-filters">
+          {[
+            { label: "Unit", value: filterUnit, setter: setFilterUnit, opts: units },
+            { label: "Line", value: filterLine, setter: setFilterLine, opts: lines },
+            { label: "Machine", value: filterMachine, setter: setFilterMachine, opts: machines },
+            { label: "Parameter", value: filterParam, setter: setFilterParam, opts: parameters },
+            { label: "Period", value: filterPeriod, setter: setFilterPeriod, opts: periods },
+          ].map((f) => (
+            <div key={f.label} className="alerts-filter">
+              <label className="alerts-filter-label">{f.label}</label>
+              <Dropdown value={f.value} onValueChange={f.setter} options={f.opts} />
+            </div>
+          ))}
+          <div className="alerts-filter">
+            <label className="alerts-filter-label">Status</label>
+            <Dropdown
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v as any)}
+              options={[
+                { value: "all", label: "All" },
+                { value: "active", label: "Active" },
+                { value: "acknowledged", label: "Acknowledged" },
+              ]}
+            />
           </div>
-        ))}
-        <div className="alerts-filter">
-          <label className="alerts-filter-label">Status</label>
-          <Dropdown
-            value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as any)}
-            options={[
-              { value: "all", label: "All" },
-              { value: "active", label: "Active" },
-              { value: "acknowledged", label: "Acknowledged" },
-            ]}
-          />
         </div>
       </div>
 

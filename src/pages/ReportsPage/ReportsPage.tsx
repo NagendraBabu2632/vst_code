@@ -216,64 +216,67 @@ const ReportsPage = () => {
   );
 
   return (
-    <DashboardLayout title="Reports">
-      <div className="reports-filters">
-        {[
-          { label: "Unit", value: filterUnit, setter: setFilterUnit, opts: units },
-          { label: "Line", value: filterLine, setter: setFilterLine, opts: lines },
-          { label: "Machine", value: filterMachine, setter: setFilterMachine, opts: machines },
-          { label: "Parameter", value: filterParam, setter: setFilterParam, opts: parameters },
-          { label: "Family", value: filterSku, setter: setFilterSku, opts: families },
-          { label: "Shift", value: filterShift, setter: setFilterShift, opts: shifts },
-        ].map((f) => (
-          <div key={f.label} className="reports-filter">
-            <label className="reports-filter-label">{f.label}</label>
-            <Dropdown value={f.value} onValueChange={f.setter} options={f.opts} />
+    <DashboardLayout>
+      <div className="page-header-row">
+        <h2 className="page-title">Reports</h2>
+        <div className="reports-filters">
+          {[
+            { label: "Unit", value: filterUnit, setter: setFilterUnit, opts: units },
+            { label: "Line", value: filterLine, setter: setFilterLine, opts: lines },
+            { label: "Machine", value: filterMachine, setter: setFilterMachine, opts: machines },
+            { label: "Parameter", value: filterParam, setter: setFilterParam, opts: parameters },
+            { label: "Family", value: filterSku, setter: setFilterSku, opts: families },
+            { label: "Shift", value: filterShift, setter: setFilterShift, opts: shifts },
+          ].map((f) => (
+            <div key={f.label} className="reports-filter">
+              <label className="reports-filter-label">{f.label}</label>
+              <Dropdown value={f.value} onValueChange={f.setter} options={f.opts} />
+            </div>
+          ))}
+          <div className="reports-filter">
+            <label className="reports-filter-label">Period</label>
+            <Dropdown
+              value={period}
+              onValueChange={(v) => { setPeriod(v as PeriodOption); setPage(1); }}
+              options={(Object.keys(periodLabels) as PeriodOption[]).map((k) => ({
+                value: k,
+                label: periodLabels[k],
+              }))}
+            />
           </div>
-        ))}
-        <div className="reports-filter">
-          <label className="reports-filter-label">Period</label>
-          <Dropdown
-            value={period}
-            onValueChange={(v) => { setPeriod(v as PeriodOption); setPage(1); }}
-            options={(Object.keys(periodLabels) as PeriodOption[]).map((k) => ({
-              value: k,
-              label: periodLabels[k],
-            }))}
-          />
+          {period === "custom" && (
+            <>
+              <div className="reports-date-field">
+                <label className="reports-filter-label">Start Date</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="reports-date-btn">
+                      <CalendarIcon className="reports-cal-icon" />
+                      {startDate ? format(startDate, "dd MMM yyyy") : "Select"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="reports-date-field">
+                <label className="reports-filter-label">End Date</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="reports-date-btn">
+                      <CalendarIcon className="reports-cal-icon" />
+                      {endDate ? format(endDate, "dd MMM yyyy") : "Select"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </>
+          )}
         </div>
-        {period === "custom" && (
-          <>
-            <div className="reports-date-field">
-              <label className="reports-filter-label">Start Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="reports-date-btn">
-                    <CalendarIcon className="reports-cal-icon" />
-                    {startDate ? format(startDate, "dd MMM yyyy") : "Select"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="popover-content--calendar" align="start">
-                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="reports-date-field">
-              <label className="reports-filter-label">End Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="reports-date-btn">
-                    <CalendarIcon className="reports-cal-icon" />
-                    {endDate ? format(endDate, "dd MMM yyyy") : "Select"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="popover-content--calendar" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </>
-        )}
       </div>
 
       <Tabs value={reportType} onValueChange={(v) => { setReportType(v as ReportType); setPage(1); setSearchQuery(""); }}>
