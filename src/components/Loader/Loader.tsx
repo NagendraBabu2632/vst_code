@@ -3,9 +3,10 @@ import "./Loader.css";
 interface LoaderProps {
   fullScreen?: boolean;
   size?: "sm" | "md" | "lg";
+  message?: string;
 }
 
-const Loader = ({ fullScreen = false, size = "md" }: LoaderProps) => {
+const Loader = ({ fullScreen = false, size = "md", message }: LoaderProps) => {
   const spinnerClass = [
     "loader__spinner",
     size === "sm" ? "loader__spinner--sm" : "",
@@ -14,9 +15,18 @@ const Loader = ({ fullScreen = false, size = "md" }: LoaderProps) => {
     .filter(Boolean)
     .join(" ");
 
+  const wrapClass = fullScreen
+    ? "loader-fullscreen"
+    : message
+    ? "loader-page"
+    : "loader-inline";
+
   return (
-    <div className={fullScreen ? "loader-fullscreen" : "loader-inline"}>
-      <div className={spinnerClass} role="status" aria-label="Loading" />
+    <div className={wrapClass}>
+      <div className="loader__inner">
+        <div className={spinnerClass} role="status" aria-label="Loading" />
+        {message && <p className="loader__message">{message}</p>}
+      </div>
     </div>
   );
 };

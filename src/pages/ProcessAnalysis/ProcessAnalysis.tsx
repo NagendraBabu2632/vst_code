@@ -1,8 +1,20 @@
 import './ProcessAnalysis.css';
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import ProcessFilters from "@/components/ProcessFilters";
-import { processData } from "@/data/mockData";
+import Loader from "@/components/Loader/Loader";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
+import {
+  fetchProcessAnalysisData,
+  selectProcessLoading,
+  selectProcessError,
+  selectProcessData,
+} from "@/redux/slices/processAnalysisSlice";
+import {
+  resetPageSelections,
+  selectDropdownSelections,
+  buildProcessPayload,
+} from "@/redux/slices/dropdownSlice";
 import { motion } from "framer-motion";
 import { Droplets, Thermometer, Wind, BarChart3, TrendingUp, Download, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,29 +56,35 @@ const chartConfigs: ChartConfig[] = [
   { title: "Humidity Control Chart", icon: Wind, iconColor: "text-chart-humidity", dataKey: "humidity", lineColor: "hsl(290, 60%, 55%)", target: 58, lsl: 50, usl: 65, lcl: 52, ucl: 63, unit: "% RH", tagId: "HC", yDomain: [45, 70] },
 ];
 
-interface SPCChartProps { config: ChartConfig; delay: number; period: string; }
+interface SPCChartProps {
+  config: ChartConfig;
+  delay: number;
+  period: string;
+}
 
 const isMultiDayPeriod = (p: string) => p === "last7" || p === "last30" || p === "thisMonth";
 
 const getPeriodRange = (p: string): { start: Date; end: Date } | null => {
   const now = new Date();
-  if (p === "last7")      return { start: subDays(now, 6),       end: now };
-  if (p === "last30")     return { start: subDays(now, 29),      end: now };
-  if (p === "thisMonth")  return { start: startOfMonth(now),     end: now };
+  if (p === "last7")     return { start: subDays(now, 6), end: now };
+  if (p === "last30")    return { start: subDays(now, 29), end: now };
+  if (p === "thisMonth") return { start: startOfMonth(now), end: now };
   return null;
 };
 
 const SPCChart = ({ config, delay, period }: SPCChartProps) => {
-  const [viewMode, setViewMode]       = useState<"timeseries" | "histogram">("timeseries");
-  const [showLimits, setShowLimits]   = useState(true);
+  const processData = useAppSelector(selectProcessData);
+
+  const [viewMode, setViewMode]         = useState<"timeseries" | "histogram">("timeseries");
+  const [showLimits, setShowLimits]     = useState(true);
   const [showSPCRules, setShowSPCRules] = useState(true);
   const multiDay = isMultiDayPeriod(period);
-  const [xAxisMode, setXAxisMode]     = useState<"sample" | "time">("time");
+  const [xAxisMode, setXAxisMode]       = useState<"sample" | "time">("time");
   const effectiveXAxisMode: "sample" | "time" = multiDay ? "time" : xAxisMode;
 
   const values = processData.map((d) => d[config.dataKey as keyof typeof d] as number);
-  const stats = useMemo(() => calcStats(values, config.target, config.lsl, config.usl), []);
-  const histogramData = useMemo(() => buildHistogramData(values), []);
+  const stats = useMemo(() => calcStats(values, config.target, config.lsl, config.usl), [values]);
+  const histogramData = useMemo(() => buildHistogramData(values), [values]);
 
   const useSigma = true;
   const effectiveConfig: ChartConfig = useMemo(() => {
@@ -93,7 +111,7 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
       ...d,
       timestamp: new Date(start.getTime() + (n > 1 ? (i / (n - 1)) * span : 0)).toISOString(),
     }));
-  }, [periodRange]);
+  }, [periodRange, processData]);
 
   const spanHours = useMemo(() => {
     if (displayData.length < 2) return 0;
@@ -104,9 +122,9 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
 
   const timeTickFormatter = (v: string) => {
     const d = new Date(v);
-    if (multiDay)          return format(d, "dd MMM");
-    if (spanHours <= 24)   return format(d, "HH:mm");
-    if (spanHours <= 168)  return format(d, "dd MMM HH:mm");
+    if (multiDay)         return format(d, "dd MMM");
+    if (spanHours <= 24)  return format(d, "HH:mm");
+    if (spanHours <= 168) return format(d, "dd MMM HH:mm");
     return format(d, "dd MMM");
   };
 
@@ -119,7 +137,7 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
     a.download = `${config.dataKey}_data.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [config.dataKey]);
+  }, [config.dataKey, processData]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -250,12 +268,37 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
 };
 
 const ProcessAnalysis = () => {
-  const [period, setPeriod] = useState<string>("last7");
+  const dispatch = useAppDispatch();
+  const loading = useAppSelector(selectProcessLoading);
+  const error = useAppSelector(selectProcessError);
+  const processData = useAppSelector(selectProcessData);
+  const selections = useAppSelector(selectDropdownSelections);
+
+  const period = selections.period;
+
+  // Reset this page's dropdowns to defaults on every mount
+  useEffect(() => {
+    dispatch(resetPageSelections({
+      unit: "all", line: "all", machine: "all",
+      processParameter: "moistureS1", family: "all", period: "last7",
+    }));
+  }, [dispatch]);
+
+  useEffect(() => {
+    dispatch(fetchProcessAnalysisData(buildProcessPayload(selections)));
+  // Re-fetch whenever any filter selection changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, selections.unit, selections.line, selections.machine, selections.shift, selections.period, selections.processParameter, selections.family]);
+
+  if (loading) return <DashboardLayout><Loader message="Loading Process Data…" /></DashboardLayout>;
+  if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
+  if (!processData.length) return null;
+
   return (
     <DashboardLayout>
       <div className="page-header-row">
         <h2 className="page-title">Process Analysis</h2>
-        <ProcessFilters period={period} onPeriodChange={setPeriod} />
+        <ProcessFilters />
       </div>
       <div className="process-list">
         {chartConfigs.map((config, i) => (

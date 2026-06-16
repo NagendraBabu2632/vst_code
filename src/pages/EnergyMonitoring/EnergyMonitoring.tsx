@@ -1,10 +1,24 @@
 import './EnergyMonitoring.css';
-import { useState } from "react";
+import { useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
+import Loader from "@/components/Loader/Loader";
 import { motion } from "framer-motion";
 import Dropdown from "@/components/Dropdown";
 import EnergyTreeTable from "@/components/EnergyTreeTable";
 import type { EnergyPeriod } from "@/components/EnergyTreeTable";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
+import {
+  fetchEnergyMonitoringData,
+  selectEnergyLoading,
+  selectEnergyError,
+} from "@/redux/slices/energyMonitoringSlice";
+import {
+  setDropdownSelection,
+  resetPageSelections,
+  selectDropdownSelections,
+  selectDropdownData,
+  buildEnergyPayload,
+} from "@/redux/slices/dropdownSlice";
 
 type PeriodOption = EnergyPeriod;
 
@@ -17,8 +31,28 @@ const periodLabels: Record<PeriodOption, string> = {
 };
 
 const EnergyMonitoring = () => {
-  const [period, setPeriod] = useState<PeriodOption>("today");
-  const [shift, setShift] = useState<string>("All Shifts");
+  const dispatch = useAppDispatch();
+  const loading = useAppSelector(selectEnergyLoading);
+  const error = useAppSelector(selectEnergyError);
+  const selections = useAppSelector(selectDropdownSelections);
+  const dropdownData = useAppSelector(selectDropdownData);
+
+  const shiftOptions = (dropdownData?.common?.shifts ?? []) as { value: string; label: string }[];
+  const period = (selections.period as PeriodOption) ?? "today";
+  const shift = selections.shift;
+
+  // Reset this page's dropdowns to defaults on every mount
+  useEffect(() => {
+    dispatch(resetPageSelections({ period: "today", shift: "all" }));
+  }, [dispatch]);
+
+  useEffect(() => {
+    dispatch(fetchEnergyMonitoringData(buildEnergyPayload(selections)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, selections.unit, selections.line, selections.machine, selections.shift, selections.period]);
+
+  if (loading) return <DashboardLayout><Loader message="Loading Energy Data…" /></DashboardLayout>;
+  if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
   return (
     <DashboardLayout>
@@ -29,7 +63,7 @@ const EnergyMonitoring = () => {
             <label className="energy-field-label">Period</label>
             <Dropdown
               value={period}
-              onValueChange={(v) => setPeriod(v as PeriodOption)}
+              onValueChange={(v) => dispatch(setDropdownSelection({ key: "period", value: v }))}
               triggerClassName="w-[150px]"
               options={(Object.keys(periodLabels) as PeriodOption[]).map((k) => ({
                 value: k,
@@ -41,9 +75,13 @@ const EnergyMonitoring = () => {
             <label className="energy-field-label">Shift</label>
             <Dropdown
               value={shift}
-              onValueChange={setShift}
+              onValueChange={(v) => dispatch(setDropdownSelection({ key: "shift", value: v }))}
               triggerClassName="w-[140px]"
-              options={["All Shifts", "Shift A", "Shift B", "Shift C"]}
+              options={
+                shiftOptions.length
+                  ? shiftOptions.map((s) => ({ value: s.value, label: s.label }))
+                  : ["All Shifts", "Shift A", "Shift B", "Shift C"]
+              }
             />
           </div>
         </div>

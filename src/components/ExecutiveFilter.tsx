@@ -24,10 +24,10 @@ interface Props {
 }
 
 const SHIFTS = [
-  { id: "A", label: "Shift A", time: "06:00 - 14:00" },
-  { id: "B", label: "Shift B", time: "14:00 - 22:00" },
-  { id: "C", label: "Shift C", time: "22:00 - 06:00" },
-  { id: "D", label: "Daily",   time: "06:00 - 06:00" },
+  { id: "A", label: "Shift A", time: "07:00 - 15:30" },
+  { id: "B", label: "Shift B", time: "15:30 - 23:00" },
+  { id: "C", label: "Shift C", time: "23:00 - 07:00" },
+  { id: "D", label: "Daily",   time: "07:00 - 07:00" },
 ];
 
 const TABS: { value: ExecMode; label: string }[] = [

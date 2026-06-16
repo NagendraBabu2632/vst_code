@@ -1,7 +1,23 @@
 import './AlertsPage.css';
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
-import { alertsData, Alert } from "@/data/mockData";
+import Loader from "@/components/Loader/Loader";
+import type { Alert } from "@/data/mockData";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
+import {
+  fetchAlertsData,
+  acknowledgeAlert,
+  selectAlertsLoading,
+  selectAlertsError,
+  selectAlerts,
+} from "@/redux/slices/alertsSlice";
+import {
+  setDropdownSelection,
+  resetPageSelections,
+  selectDropdownSelections,
+  selectDropdownData,
+  buildAlertsPayload,
+} from "@/redux/slices/dropdownSlice";
 import { motion } from "framer-motion";
 import {
   AlertTriangle, CheckCircle, XCircle, Eye, ExternalLink, Clock, User,
@@ -17,15 +33,11 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const units = ["All", "PMD", "SMD"];
-const lines = ["All", "Line 1", "Line 2", "Line 3", "Line 4", "Line 5"];
-const machines = ["All", "Compressor A", "Dryer B", "Motor C", "Furnace D", "Pump E", "Conveyor F"];
 const parameters = ["All", "Moisture", "Humidity", "Temperature"];
-const periods = ["Last One Hour", "Last 24 Hours", "Last One Month"];
 
 const SeverityIcon = ({ severity }: { severity: string }) => {
   if (severity === "Critical") return <XCircle className="severity-icon severity-icon--critical" />;
-  if (severity === "Warning") return <AlertTriangle className="severity-icon severity-icon--warning" />;
+  if (severity === "Warning")  return <AlertTriangle className="severity-icon severity-icon--warning" />;
   return <CheckCircle className="severity-icon severity-icon--ok" />;
 };
 
@@ -114,84 +126,127 @@ const AlertRow = ({ alert, onAcknowledge }: { alert: Alert; onAcknowledge: (aler
 );
 
 const AlertsPage = () => {
-  const [alerts, setAlerts] = useState<Alert[]>(
-    alertsData.filter((a) => ["Moisture", "Humidity", "Temperature"].includes(a.parameter as string))
-  );
-  const [ackAlert, setAckAlert] = useState<Alert | null>(null);
+  const dispatch = useAppDispatch();
+  const loading = useAppSelector(selectAlertsLoading);
+  const error   = useAppSelector(selectAlertsError);
+  const alerts  = useAppSelector(selectAlerts);
+  const selections = useAppSelector(selectDropdownSelections);
+  const dropdownData = useAppSelector(selectDropdownData);
+
+  const [ackAlert, setAckAlert]     = useState<Alert | null>(null);
   const [ackComment, setAckComment] = useState("");
 
-  const [filterUnit, setFilterUnit] = useState("All");
-  const [filterLine, setFilterLine] = useState("All");
-  const [filterMachine, setFilterMachine] = useState("All");
-  const [filterParam, setFilterParam] = useState("All");
-  const [filterPeriod, setFilterPeriod] = useState("Last One Hour");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "acknowledged">("all");
-  const [severityTab, setSeverityTab] = useState("all");
+  // Page-specific display filters (not synced to global state)
+  const [filterParam,   setFilterParam]   = useState("All");
+  const [statusFilter,  setStatusFilter]  = useState<"all" | "active" | "acknowledged">("all");
+  const [severityTab,   setSeverityTab]   = useState("all");
+
+  // Resolve option lists from DROPDOWN_DATA
+  const unitOpts    = (dropdownData?.alertsPage?.unit?.options    ?? [{ value: "all", label: "All" }, { value: "PMD", label: "PMD" }, { value: "SMD", label: "SMD" }]) as { value: string; label: string }[];
+  const lineOpts    = (dropdownData?.common?.lines                ?? []) as { value: string; label: string }[];
+  const machineOpts = (dropdownData?.common?.machines             ?? []) as { value: string; label: string }[];
+  const periodOpts  = (dropdownData?.alertsPage?.period?.options  ?? [
+    { value: "last1h",  label: "Last One Hour" },
+    { value: "last24h", label: "Last 24 Hours" },
+    { value: "last1m",  label: "Last One Month" },
+  ]) as { value: string; label: string }[];
+
+  const set = (key: Parameters<typeof setDropdownSelection>[0]["key"]) =>
+    (value: string) => dispatch(setDropdownSelection({ key, value }));
+
+  // Reset this page's dropdowns to defaults on every mount
+  useEffect(() => {
+    dispatch(resetPageSelections({ unit: "all", line: "all", machine: "all", period: "last24h" }));
+  }, [dispatch]);
+
+  useEffect(() => {
+    dispatch(fetchAlertsData(buildAlertsPayload(selections)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, selections.unit, selections.line, selections.machine, selections.shift, selections.period]);
+
+  // Map the global selection values back to display labels for client-side filtering
+  const unitLabel    = unitOpts.find((o) => o.value === selections.unit)?.label    ?? selections.unit;
+  const lineLabel    = lineOpts.find((o) => o.value === selections.line)?.label    ?? selections.line;
+  const machineLabel = machineOpts.find((o) => o.value === selections.machine)?.label ?? selections.machine;
 
   const filtered = useMemo(() => {
     let list = alerts;
-    if (filterUnit !== "All") list = list.filter((a) => a.unitName === filterUnit);
-    if (filterLine !== "All") list = list.filter((a) => a.productionLine === filterLine);
-    if (filterMachine !== "All") list = list.filter((a) => a.equipment === filterMachine);
-    if (filterParam !== "All") list = list.filter((a) => a.parameter === filterParam);
-    if (statusFilter === "active") list = list.filter((a) => !a.acknowledged);
-    if (statusFilter === "acknowledged") list = list.filter((a) => a.acknowledged);
-    if (severityTab === "critical") list = list.filter((a) => a.severity === "Critical");
-    if (severityTab === "warning") list = list.filter((a) => a.severity === "Warning");
+    if (selections.unit !== "all" && unitOpts.length)
+      list = list.filter((a) => a.unitName === unitLabel || a.unitName === selections.unit);
+    if (selections.line !== "all" && lineOpts.length)
+      list = list.filter((a) => a.productionLine === lineLabel || a.productionLine === selections.line);
+    if (selections.machine !== "all" && machineOpts.length)
+      list = list.filter((a) => a.equipment === machineLabel || a.equipment === selections.machine);
+    if (filterParam   !== "All") list = list.filter((a) => a.parameter === filterParam);
+    if (statusFilter  === "active")       list = list.filter((a) => !a.acknowledged);
+    if (statusFilter  === "acknowledged") list = list.filter((a) => a.acknowledged);
+    if (severityTab   === "critical") list = list.filter((a) => a.severity === "Critical");
+    if (severityTab   === "warning")  list = list.filter((a) => a.severity === "Warning");
     return list;
-  }, [alerts, filterUnit, filterLine, filterMachine, filterParam, statusFilter, severityTab]);
+  }, [alerts, selections.unit, selections.line, selections.machine, unitLabel, lineLabel, machineLabel, unitOpts, lineOpts, machineOpts, filterParam, statusFilter, severityTab]);
 
   const kpi = useMemo(() => ({
-    total: filtered.length,
-    critical: filtered.filter((a) => a.severity === "Critical").length,
-    warning: filtered.filter((a) => a.severity === "Warning").length,
+    total:        filtered.length,
+    critical:     filtered.filter((a) => a.severity === "Critical").length,
+    warning:      filtered.filter((a) => a.severity === "Warning").length,
     acknowledged: filtered.filter((a) => a.acknowledged).length,
   }), [filtered]);
 
   const handleAcknowledge = () => {
     if (!ackAlert || !ackComment.trim()) return;
-    setAlerts((prev) =>
-      prev.map((a) =>
-        a.id === ackAlert.id
-          ? {
-              ...a,
-              acknowledged: true,
-              acknowledgedBy: "Current User",
-              acknowledgedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
-              acknowledgedComment: ackComment.trim(),
-            }
-          : a
-      )
+    dispatch(
+      acknowledgeAlert({
+        id: ackAlert.id,
+        acknowledgedBy: "Current User",
+        acknowledgedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+        acknowledgedComment: ackComment.trim(),
+      })
     );
     setAckAlert(null);
     setAckComment("");
   };
+
+  if (loading) return <DashboardLayout><Loader message="Loading Alerts…" /></DashboardLayout>;
+  if (error)   return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
   return (
     <DashboardLayout>
       <div className="page-header-row">
         <h2 className="page-title">Alerts Management</h2>
         <div className="alerts-filters">
+          {/* Global filters — stored in Redux */}
           {[
-            { label: "Unit", value: filterUnit, setter: setFilterUnit, opts: units },
-            { label: "Line", value: filterLine, setter: setFilterLine, opts: lines },
-            { label: "Machine", value: filterMachine, setter: setFilterMachine, opts: machines },
-            { label: "Parameter", value: filterParam, setter: setFilterParam, opts: parameters },
-            { label: "Period", value: filterPeriod, setter: setFilterPeriod, opts: periods },
+            { label: "Unit",    value: selections.unit,    setter: set("unit"),    opts: unitOpts },
+            { label: "Line",    value: selections.line,    setter: set("line"),    opts: lineOpts },
+            { label: "Machine", value: selections.machine, setter: set("machine"), opts: machineOpts },
           ].map((f) => (
             <div key={f.label} className="alerts-filter">
               <label className="alerts-filter-label">{f.label}</label>
               <Dropdown value={f.value} onValueChange={f.setter} options={f.opts} />
             </div>
           ))}
+
+          {/* Parameter — page-level display filter */}
+          <div className="alerts-filter">
+            <label className="alerts-filter-label">Parameter</label>
+            <Dropdown value={filterParam} onValueChange={setFilterParam} options={parameters} />
+          </div>
+
+          {/* Period — stored in Redux */}
+          <div className="alerts-filter">
+            <label className="alerts-filter-label">Period</label>
+            <Dropdown value={selections.period} onValueChange={set("period")} options={periodOpts} />
+          </div>
+
+          {/* Status — page-level display filter */}
           <div className="alerts-filter">
             <label className="alerts-filter-label">Status</label>
             <Dropdown
               value={statusFilter}
               onValueChange={(v) => setStatusFilter(v as any)}
               options={[
-                { value: "all", label: "All" },
-                { value: "active", label: "Active" },
+                { value: "all",          label: "All" },
+                { value: "active",       label: "Active" },
                 { value: "acknowledged", label: "Acknowledged" },
               ]}
             />
@@ -201,10 +256,10 @@ const AlertsPage = () => {
 
       <div className="alerts-kpi-grid">
         {[
-          { label: "Total Alerts", value: kpi.total, icon: <Eye />, mod: "primary" },
-          { label: "Critical", value: kpi.critical, icon: <XCircle />, mod: "critical" },
-          { label: "Warning", value: kpi.warning, icon: <AlertTriangle />, mod: "warning" },
-          { label: "Acknowledged", value: kpi.acknowledged, icon: <CheckCircle />, mod: "success" },
+          { label: "Total Alerts", value: kpi.total,        icon: <Eye />,           mod: "primary" },
+          { label: "Critical",     value: kpi.critical,     icon: <XCircle />,       mod: "critical" },
+          { label: "Warning",      value: kpi.warning,      icon: <AlertTriangle />, mod: "warning" },
+          { label: "Acknowledged", value: kpi.acknowledged, icon: <CheckCircle />,   mod: "success" },
         ].map((c) => (
           <div key={c.label} className="kpi-card alerts-kpi-row">
             <div className={`alerts-kpi-icon alerts-kpi-icon--${c.mod}`}>{c.icon}</div>

@@ -123,18 +123,24 @@
 .exec-moisture-fill {
   height: 100%;
   border-radius: 0.125rem;
-  transition: all 0.3s;
-  width: var(--bar-width, 0%);
-  background-color: var(--bar-color, var(--primary));
+  transition: width 0.3s;
+  background-color: var(--primary);
 }
+.exec-moisture-fill--ok       { background-color: hsl(142, 70%, 45%); }
+.exec-moisture-fill--warning  { background-color: hsl(45, 95%, 55%); }
+.exec-moisture-fill--critical { background-color: hsl(0, 85%, 60%); }
+
 .exec-moisture-value {
   font-size: 11px;
   font-weight: 700;
   font-family: var(--font-mono);
   width: 3rem;
   text-align: right;
-  color: var(--value-color, var(--foreground));
+  color: var(--foreground);
 }
+.exec-moisture-value--ok       { color: hsl(142, 70%, 45%); }
+.exec-moisture-value--warning  { color: hsl(45, 95%, 55%); }
+.exec-moisture-value--critical { color: hsl(0, 85%, 60%); }
 
 .exec-chart-title--no-margin {
   margin: 0;
