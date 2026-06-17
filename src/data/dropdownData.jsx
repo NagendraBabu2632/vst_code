@@ -1,58 +1,85 @@
 // Single source of truth for all dropdown options across the application
 
+// ─── Shared blend list (all 23 blends, reused in machineToBlendMapping) ───────
+const ALL_BLENDS = [
+  { value: "CFT",   label: "CFT" },
+  { value: "CMK",   label: "CMK" },
+  { value: "CSF",   label: "CSF" },
+  { value: "CSF64", label: "CSF64" },
+  { value: "CSV",   label: "CSV" },
+  { value: "CVF",   label: "CVF" },
+  { value: "CVG",   label: "CVG" },
+  { value: "ESO",   label: "ESO" },
+  { value: "ESP",   label: "ESP" },
+  { value: "ETR",   label: "ETR" },
+  { value: "MRD",   label: "MRD" },
+  { value: "MTR",   label: "MTR" },
+  { value: "MTU",   label: "MTU" },
+  { value: "SER",   label: "SER" },
+  { value: "SES",   label: "SES" },
+  { value: "T3",    label: "T3" },
+  { value: "TAM",   label: "TAM" },
+  { value: "TRL",   label: "TRL" },
+  { value: "TRT",   label: "TRT" },
+  { value: "TTL",   label: "TTL" },
+  { value: "TTLNB", label: "TTLNB" },
+  { value: "TTN",   label: "TTN" },
+  { value: "ZFT",   label: "ZFT" },
+];
+
 const DROPDOWN_DATA = {
 
   // ─────────────────────────────────────────────
   // SHARED — reused across multiple pages
   // ─────────────────────────────────────────────
   common: {
+    // Units: PMD and SMD
     units: [
-      { value: "all",   label: "All Units" },
-      { value: "unit1", label: "Unit 1" },
-      { value: "unit2", label: "Unit 2" },
-      { value: "unit3", label: "Unit 3" },
-      { value: "PMD",   label: "PMD" },
-      { value: "SMD",   label: "SMD" },
+      { value: "PMD", label: "PMD" },
+      { value: "SMD", label: "SMD" },
     ],
+
+    // Lines
     lines: [
-      { value: "all",   label: "All Lines" },
-      { value: "line1", label: "Line 1" },
-      { value: "line2", label: "Line 2" },
-      { value: "line3", label: "Line 3" },
-      { value: "line4", label: "Line 4" },
-      { value: "line5", label: "Line 5" },
+      { value: "All",         label: "All" },
+      { value: "Line All",    label: "Line All" },
+      { value: "Line Lamina", label: "Line Lamina" },
+      { value: "Line Stem",   label: "Line Stem" },
     ],
+
+    // Machines: full machine list
     machines: [
-      { value: "all",         label: "All Machines" },
-      { value: "compressorA", label: "Compressor A" },
-      { value: "dryerB",      label: "Dryer B" },
-      { value: "motorC",      label: "Motor C" },
-      { value: "furnaceD",    label: "Furnace D" },
-      { value: "pumpE",       label: "Pump E" },
-      { value: "conveyorF",   label: "Conveyor F" },
+      { value: "ADDMoist",             label: "ADDMoist" },
+      { value: "All",                  label: "All" },
+      { value: "CRS Dryer Exit",       label: "CRS Dryer Exit" },
+      { value: "CRS Dryer Infeed",     label: "CRS Dryer Infeed" },
+      { value: "DCC EXIT",             label: "DCC EXIT" },
+      { value: "Flaour Cylinder EXIT", label: "Flaour Cylinder EXIT" },
+      { value: "Lamina Dryer Infeed",  label: "Lamina Dryer Infeed" },
+      { value: "Lamina Dryer Outfeed", label: "Lamina Dryer Outfeed" },
+      { value: "Product Bin",          label: "Product Bin" },
     ],
+
+    // Families = Blends (23 blend codes)
     families: [
-      { value: "all",     label: "All Families" },
-      { value: "familyA", label: "Family A" },
-      { value: "familyB", label: "Family B" },
-      { value: "familyC", label: "Family C" },
-      { value: "familyD", label: "Family D" },
-      { value: "familyE", label: "Family E" },
+      ...ALL_BLENDS,
     ],
+
     shifts: [
-      { value: "all",    label: "All Shifts",  time: "" },
-      { value: "shiftA", label: "Shift A",     time: "06:00 – 14:00" },
-      { value: "shiftB", label: "Shift B",     time: "14:00 – 22:00" },
-      { value: "shiftC", label: "Shift C",     time: "22:00 – 06:00" },
-      { value: "daily",  label: "Daily",       time: "06:00 – 06:00" },
+      { value: "all",    label: "All Shifts", time: "" },
+      { value: "shiftA", label: "Shift A",    time: "07:00 – 15:30" },
+      { value: "shiftB", label: "Shift B",    time: "15:30 – 23:00" },
+      { value: "shiftC", label: "Shift C",    time: "23:00 – 07:00" },
+      { value: "daily",  label: "Daily",      time: "07:00 – 07:00" },
     ],
+
+    // Parameters: Humidity / Moisture / Temperature
     parameters: [
-      { value: "all",         label: "All Parameters", unit: "" },
-      { value: "energy",      label: "Energy",         unit: "kWh" },
-      { value: "moisture",    label: "Moisture",       unit: "%" },
-      { value: "humidity",    label: "Humidity",       unit: "%RH" },
-      { value: "temperature", label: "Temperature",    unit: "°C" },
+      { value: "Humidity",    label: "Humidity",    unit: "%RH" },
+      { value: "Moisture",    label: "Moisture",    unit: "%" },
+      { value: "Temperature", label: "Temperature", unit: "°C" },
     ],
+
     severity: [
       { value: "all",      label: "All",      color: "#6b7280" },
       { value: "critical", label: "Critical", color: "#ef4444" },
@@ -60,36 +87,115 @@ const DROPDOWN_DATA = {
       { value: "normal",   label: "Normal",   color: "#10b981" },
       { value: "info",     label: "Info",     color: "#3b82f6" },
     ],
+
     alertStatus: [
       { value: "all",          label: "All" },
       { value: "active",       label: "Active" },
       { value: "acknowledged", label: "Acknowledged" },
     ],
+
+    // ── Dependency: Unit → Lines ─────────────────────────────────────────────
+    // PMD has 3 lines; SMD has only Line All
+    unitToLineMapping: {
+      PMD: [
+        { value: "Line All",    label: "Line All" },
+        { value: "Line Lamina", label: "Line Lamina" },
+        { value: "Line Stem",   label: "Line Stem" },
+      ],
+      SMD: [
+        { value: "Line All", label: "Line All" },
+      ],
+    },
+
+    // ── Dependency: Unit → Parameters ────────────────────────────────────────
+    // PMD supports all 3 parameters; SMD excludes Moisture
+    unitToParamMapping: {
+      PMD: [
+        { value: "Humidity",    label: "Humidity",    unit: "%RH" },
+        { value: "Moisture",    label: "Moisture",    unit: "%" },
+        { value: "Temperature", label: "Temperature", unit: "°C" },
+      ],
+      SMD: [
+        { value: "Humidity",    label: "Humidity",    unit: "%RH" },
+        { value: "Temperature", label: "Temperature", unit: "°C" },
+      ],
+    },
+
+    // ── Dependency: Line → Machines ──────────────────────────────────────────
+    lineToMachineMapping: {
+      "Line All": [
+        { value: "All",                  label: "All" },
+        { value: "Flaour Cylinder EXIT", label: "Flaour Cylinder EXIT" },
+        { value: "Product Bin",          label: "Product Bin" },
+      ],
+      "Line Lamina": [
+        { value: "DCC EXIT",             label: "DCC EXIT" },
+        { value: "Lamina Dryer Infeed",  label: "Lamina Dryer Infeed" },
+        { value: "Lamina Dryer Outfeed", label: "Lamina Dryer Outfeed" },
+      ],
+      "Line Stem": [
+        { value: "ADDMoist",         label: "ADDMoist" },
+        { value: "CRS Dryer Exit",   label: "CRS Dryer Exit" },
+        { value: "CRS Dryer Infeed", label: "CRS Dryer Infeed" },
+      ],
+    },
+
+    // ── Dependency: Machine → Blends (Families) ──────────────────────────────
+    // "All" machine has no blend options; every other machine carries all 23 blends
+    machineToBlendMapping: {
+      "All":                  [...ALL_BLENDS],
+      "ADDMoist":             [...ALL_BLENDS],
+      "CRS Dryer Exit":       [...ALL_BLENDS],
+      "CRS Dryer Infeed":     [...ALL_BLENDS],
+      "DCC EXIT":             [...ALL_BLENDS],
+      "Flaour Cylinder EXIT": [...ALL_BLENDS],
+      "Lamina Dryer Infeed":  [...ALL_BLENDS],
+      "Lamina Dryer Outfeed": [...ALL_BLENDS],
+      "Product Bin":          [...ALL_BLENDS],
+    },
+
+    // ── Asset hierarchy (unit → line → machine tree) ─────────────────────────
     assetHierarchy: [
-      {
-        id: "unit1", label: "Unit 1",
-        lines: [
-          { id: "unit1-line1", label: "Line 1", machines: [{ id: "compA", label: "Compressor A" }, { id: "dryB", label: "Dryer B" }] },
-          { id: "unit1-line2", label: "Line 2", machines: [{ id: "motC", label: "Motor C" }, { id: "pumE", label: "Pump E" }] },
-        ],
-      },
-      {
-        id: "unit2", label: "Unit 2",
-        lines: [
-          { id: "unit2-line3", label: "Line 3", machines: [{ id: "furD", label: "Furnace D" }, { id: "conF", label: "Conveyor F" }] },
-          { id: "unit2-line4", label: "Line 4", machines: [{ id: "mixG", label: "Mixer G" }, { id: "bolH", label: "Boiler H" }] },
-        ],
-      },
       {
         id: "PMD", label: "PMD",
         lines: [
-          { id: "PMD-line1", label: "PMD Line 1", machines: [{ id: "prs1", label: "Press 1" }, { id: "prs2", label: "Press 2" }] },
+          {
+            id: "Line All", label: "Line All",
+            machines: [
+              { id: "All",                  label: "All" },
+              { id: "Flaour Cylinder EXIT", label: "Flaour Cylinder EXIT" },
+              { id: "Product Bin",          label: "Product Bin" },
+            ],
+          },
+          {
+            id: "Line Lamina", label: "Line Lamina",
+            machines: [
+              { id: "DCC EXIT",             label: "DCC EXIT" },
+              { id: "Lamina Dryer Infeed",  label: "Lamina Dryer Infeed" },
+              { id: "Lamina Dryer Outfeed", label: "Lamina Dryer Outfeed" },
+            ],
+          },
+          {
+            id: "Line Stem", label: "Line Stem",
+            machines: [
+              { id: "ADDMoist",         label: "ADDMoist" },
+              { id: "CRS Dryer Exit",   label: "CRS Dryer Exit" },
+              { id: "CRS Dryer Infeed", label: "CRS Dryer Infeed" },
+            ],
+          },
         ],
       },
       {
         id: "SMD", label: "SMD",
         lines: [
-          { id: "SMD-line1", label: "SMD Line 1", machines: [{ id: "cut1", label: "Cutter 1" }, { id: "cut2", label: "Cutter 2" }] },
+          {
+            id: "Line All", label: "Line All",
+            machines: [
+              { id: "All",                  label: "All" },
+              { id: "Flaour Cylinder EXIT", label: "Flaour Cylinder EXIT" },
+              { id: "Product Bin",          label: "Product Bin" },
+            ],
+          },
         ],
       },
     ],
@@ -154,24 +260,28 @@ const DROPDOWN_DATA = {
     line:    { id: "line",    label: "Line Name",    default: "all",        options: "→ common.lines" },
     machine: { id: "machine", label: "Machine Name", default: "all",        options: "→ common.machines" },
     processParameter: {
-      id: "process-parameter", label: "Parameter Name", default: "moistureS1",
+      id: "process-parameter", label: "Parameter Name", default: "Moisture",
       options: [
-        { value: "moistureS1",   label: "Moisture Parameter 1" },
-        { value: "moistureS2",   label: "Moisture Parameter 2" },
-        { value: "humiditySen1", label: "Humidity Sensor 1" },
-        { value: "temp1",        label: "Temperature 1" },
-        { value: "temp2",        label: "Temperature 2" },
+        { value: "Moisture",    label: "Moisture" },
+        { value: "Humidity",    label: "Humidity" },
+        { value: "Temperature", label: "Temperature" },
       ],
     },
-    familyRunning: {
-      id: "family-running", label: "Family (Running)", default: "familyA",
+    // Blend options depend on selected Machine — see common.machineToBlendMapping
+    blendRunning: {
+      id: "blend-running", label: "Blend (Running)", default: "CFT",
+      note: "Subset of machineToBlendMapping[selectedMachine] that are currently running",
       options: [
-        { value: "familyA", label: "Family A" },
-        { value: "familyB", label: "Family B" },
-        { value: "familyC", label: "Family C" },
+        { value: "CFT", label: "CFT" },
+        { value: "CMK", label: "CMK" },
+        { value: "CSF", label: "CSF" },
       ],
     },
-    family: { id: "family", label: "Family (All)", default: "all", options: "→ common.families" },
+    blend: {
+      id: "blend", label: "Blend", default: "CFT",
+      note: "Options derived from common.machineToBlendMapping[selectedMachine]",
+      options: "→ common.machineToBlendMapping[selectedMachine]",
+    },
     period: {
       id: "period", label: "Period", default: "today",
       options: [
@@ -182,9 +292,9 @@ const DROPDOWN_DATA = {
         { value: "thisMonth", label: "This Month" },
       ],
     },
-    familyRun: {
-      id: "family-run", label: "Family Run", default: "allRuns",
-      note: "Additional run timestamps generated dynamically",
+    blendRun: {
+      id: "blend-run", label: "Blend Run", default: "allRuns",
+      note: "Run timestamps generated dynamically based on selected blend + period",
       options: [
         { value: "allRuns", label: "All runs in period" },
       ],
@@ -209,9 +319,9 @@ const DROPDOWN_DATA = {
       id: "parameter", label: "Parameter", default: "all",
       options: [
         { value: "all",         label: "All" },
-        { value: "moisture",    label: "Moisture" },
-        { value: "humidity",    label: "Humidity" },
-        { value: "temperature", label: "Temperature" },
+        { value: "Moisture",    label: "Moisture" },
+        { value: "Humidity",    label: "Humidity" },
+        { value: "Temperature", label: "Temperature" },
       ],
     },
     period: {
@@ -334,15 +444,14 @@ const DROPDOWN_DATA = {
     },
     // Moisture Parameter Specifications
     moistureParameter: {
-      id: "moisture-parameter", label: "Parameter", section: "moisture-specs", default: "moistureS1",
+      id: "moisture-parameter", label: "Parameter", section: "moisture-specs", default: "Moisture",
       options: [
-        { value: "moistureS1", label: "Moisture S1" },
-        { value: "moistureS2", label: "Moisture S2" },
-        { value: "moistureS3", label: "Moisture S3" },
-        { value: "moistureS4", label: "Moisture S4" },
+        { value: "Moisture",    label: "Moisture" },
+        { value: "Humidity",    label: "Humidity" },
+        { value: "Temperature", label: "Temperature" },
       ],
     },
-    moistureFamily: { id: "moisture-family", label: "Family", section: "moisture-specs", default: "familyA", options: "→ common.families" },
+    moistureFamily: { id: "moisture-family", label: "Family", section: "moisture-specs", default: "CFT", options: "→ common.families" },
     quarter: {
       id: "quarter", label: "Quarter", section: "moisture-specs", default: "Q1",
       options: [
@@ -371,14 +480,11 @@ const DROPDOWN_DATA = {
       ],
     },
     alertParameter: {
-      id: "alert-parameter", label: "Parameter", section: "alert-configurator", default: "energy",
+      id: "alert-parameter", label: "Parameter", section: "alert-configurator", default: "Humidity",
       options: [
-        { value: "energy",      label: "Energy (kWh)" },
-        { value: "power",       label: "Power (kW)" },
-        { value: "current",     label: "Current (A)" },
-        { value: "voltage",     label: "Voltage (V)" },
-        { value: "temperature", label: "Temperature (°C)" },
-        { value: "vibration",   label: "Vibration (mm/s)" },
+        { value: "Humidity",    label: "Humidity" },
+        { value: "Moisture",    label: "Moisture" },
+        { value: "Temperature", label: "Temperature" },
       ],
     },
     alertUnit: {
@@ -390,27 +496,21 @@ const DROPDOWN_DATA = {
       ],
     },
     alertLine: {
-      id: "alert-line", label: "Line", section: "alert-configurator", default: "line1",
-      note: "Dynamically populated based on selected Unit",
-      options: [
-        { value: "line1", label: "Line 1" },
-        { value: "line2", label: "Line 2" },
-      ],
+      id: "alert-line", label: "Line", section: "alert-configurator", default: "Line All",
+      note: "Dynamically populated based on selected Unit — see common.unitToLineMapping",
+      options: "→ common.lines",
     },
     alertMachine: {
-      id: "alert-machine", label: "Machine", section: "alert-configurator", default: "compressorA",
-      note: "Dynamically populated based on selected Line",
-      options: [
-        { value: "compressorA", label: "Compressor A" },
-        { value: "dryerB",      label: "Dryer B" },
-      ],
+      id: "alert-machine", label: "Machine", section: "alert-configurator", default: "all",
+      note: "Dynamically populated based on selected Line — see common.lineToMachineMapping",
+      options: "→ common.machines",
     },
     alertShift: {
       id: "alert-shift", label: "Shift", section: "alert-configurator", default: "shiftA",
       options: [
-        { value: "shiftA", label: "Shift A", time: "06:00 – 14:00" },
-        { value: "shiftB", label: "Shift B", time: "14:00 – 22:00" },
-        { value: "shiftC", label: "Shift C", time: "22:00 – 06:00" },
+        { value: "shiftA", label: "Shift A", time: "07:00 – 15:30" },
+        { value: "shiftB", label: "Shift B", time: "15:30 – 23:00" },
+        { value: "shiftC", label: "Shift C", time: "23:00 – 07:00" },
       ],
     },
     // Notifications

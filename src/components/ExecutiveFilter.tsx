@@ -126,6 +126,7 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
                     mode="single"
                     selected={value.date}
                     onSelect={(d) => d && onChange({ ...value, date: d })}
+                    disabled={(date) => date > new Date()}
                     initialFocus
                     className="p-3 pointer-events-auto"
                   />

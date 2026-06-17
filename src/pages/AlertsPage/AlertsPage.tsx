@@ -142,22 +142,41 @@ const AlertsPage = () => {
   const [severityTab,   setSeverityTab]   = useState("all");
 
   // Resolve option lists from DROPDOWN_DATA
-  const unitOpts    = (dropdownData?.alertsPage?.unit?.options    ?? [{ value: "all", label: "All" }, { value: "PMD", label: "PMD" }, { value: "SMD", label: "SMD" }]) as { value: string; label: string }[];
-  const lineOpts    = (dropdownData?.common?.lines                ?? []) as { value: string; label: string }[];
-  const machineOpts = (dropdownData?.common?.machines             ?? []) as { value: string; label: string }[];
+  const unitOpts    = (dropdownData?.common?.units    ?? [{ value: "PMD", label: "PMD" }, { value: "SMD", label: "SMD" }]) as { value: string; label: string }[];
   const periodOpts  = (dropdownData?.alertsPage?.period?.options  ?? [
     { value: "last1h",  label: "Last One Hour" },
     { value: "last24h", label: "Last 24 Hours" },
     { value: "last1m",  label: "Last One Month" },
   ]) as { value: string; label: string }[];
 
+  // Line options cascade from selected unit
+  const unitToLineMap = (dropdownData?.common?.unitToLineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const lineOpts = (
+    selections.unit && unitToLineMap[selections.unit]
+      ? unitToLineMap[selections.unit]
+      : (dropdownData?.common?.lines ?? [])
+  ) as { value: string; label: string }[];
+
+  // Machine options cascade from selected line
+  const lineToMachineMap = (dropdownData?.common?.lineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const machineOpts = (
+    selections.line && lineToMachineMap[selections.line]
+      ? lineToMachineMap[selections.line]
+      : (dropdownData?.common?.machines ?? [])
+  ) as { value: string; label: string }[];
+
   const set = (key: Parameters<typeof setDropdownSelection>[0]["key"]) =>
     (value: string) => dispatch(setDropdownSelection({ key, value }));
 
-  // Reset this page's dropdowns to defaults on every mount
+  // Reset this page's dropdowns once dropdown data is available
   useEffect(() => {
-    dispatch(resetPageSelections({ unit: "all", line: "all", machine: "all", period: "last24h" }));
-  }, [dispatch]);
+    if (!dropdownData) return;
+    const firstUnit = unitOpts[0]?.value ?? "PMD";
+    const firstLine = unitToLineMap[firstUnit]?.[0]?.value ?? "";
+    const firstMachine = lineToMachineMap[firstLine]?.[0]?.value ?? "";
+    dispatch(resetPageSelections({ unit: firstUnit, line: firstLine, machine: firstMachine, period: "last24h" }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, dropdownData]);
 
   useEffect(() => {
     dispatch(fetchAlertsData(buildAlertsPayload(selections)));
@@ -171,11 +190,11 @@ const AlertsPage = () => {
 
   const filtered = useMemo(() => {
     let list = alerts;
-    if (selections.unit !== "all" && unitOpts.length)
+    if (selections.unit && unitOpts.length)
       list = list.filter((a) => a.unitName === unitLabel || a.unitName === selections.unit);
-    if (selections.line !== "all" && lineOpts.length)
+    if (selections.line && lineOpts.length)
       list = list.filter((a) => a.productionLine === lineLabel || a.productionLine === selections.line);
-    if (selections.machine !== "all" && machineOpts.length)
+    if (selections.machine && machineOpts.length)
       list = list.filter((a) => a.equipment === machineLabel || a.equipment === selections.machine);
     if (filterParam   !== "All") list = list.filter((a) => a.parameter === filterParam);
     if (statusFilter  === "active")       list = list.filter((a) => !a.acknowledged);
@@ -216,8 +235,8 @@ const AlertsPage = () => {
         <div className="alerts-filters">
           {/* Global filters — stored in Redux */}
           {[
-            { label: "Unit",    value: selections.unit,    setter: set("unit"),    opts: unitOpts },
-            { label: "Line",    value: selections.line,    setter: set("line"),    opts: lineOpts },
+            { label: "Unit",    value: selections.unit,    setter: (v: string) => { const fl = unitToLineMap[v]?.[0]?.value ?? ""; const fm = lineToMachineMap[fl]?.[0]?.value ?? ""; set("unit")(v); set("line")(fl); set("machine")(fm); }, opts: unitOpts },
+            { label: "Line",    value: selections.line,    setter: (v: string) => { set("line")(v); set("machine")(lineToMachineMap[v]?.[0]?.value ?? ""); }, opts: lineOpts },
             { label: "Machine", value: selections.machine, setter: set("machine"), opts: machineOpts },
           ].map((f) => (
             <div key={f.label} className="alerts-filter">

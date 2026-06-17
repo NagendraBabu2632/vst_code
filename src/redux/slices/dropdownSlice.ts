@@ -170,7 +170,7 @@ const initialState: DropdownState = {
     period: "today",
     parameter: "all",
     family: "all",
-    processParameter: "moistureS1",
+    processParameter: "Moisture",
     alertStatus: "all",
     dateRangeFrom: todayStr(),
     dateRangeTo: todayStr(),

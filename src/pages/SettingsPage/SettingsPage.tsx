@@ -1,5 +1,7 @@
 import './SettingsPage.css';
 import { useState, useRef } from "react";
+import { useAppSelector } from "@/redux/hooks/reduxHooks";
+import { selectDropdownData } from "@/redux/slices/dropdownSlice";
 import { useLocation, useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import { motion } from "framer-motion";
@@ -109,15 +111,18 @@ const SettingsPage = () => {
     { family: "Family A", year: currentYear, quarter: "Q2 (Apr–Jun)", lsl: 11.2, usl: 13.8, target: 12.5, updatedAt: new Date().toISOString().slice(0, 10) },
     { family: "Family B", year: currentYear, quarter: "Q1 (Jan–Mar)", lsl: 10.5, usl: 13.5, target: 12.0, updatedAt: new Date().toISOString().slice(0, 10) },
   ]);
-  const [specParameter, setSpecParameter] = useState(parameters[0]);
-  const [specFamily, setSpecFamily] = useState("Family A");
+  const dropdownData = useAppSelector(selectDropdownData);
+  const machineOpts = (dropdownData?.common?.machines ?? []) as { value: string; label: string }[];
+  const blendOpts   = (dropdownData?.common?.families ?? []) as { value: string; label: string }[];
+  const [specMachine, setSpecMachine] = useState("");
+  const [specBlend, setSpecBlend] = useState("");
   const [specYear, setSpecYear] = useState<number>(currentYear);
   const [specQuarter, setSpecQuarter] = useState(quarters[0]);
   const [specLsl, setSpecLsl] = useState("11.0");
   const [specUsl, setSpecUsl] = useState("14.0");
   const [specTarget, setSpecTarget] = useState("12.5");
 
-  const currentSpec = specs.find((s) => s.family === specFamily && s.year === specYear && s.quarter === specQuarter);
+  const currentSpec = specs.find((s) => s.family === specBlend && s.year === specYear && s.quarter === specQuarter);
 
   const saveSpec = () => {
     const lsl = parseFloat(specLsl); const usl = parseFloat(specUsl); const target = parseFloat(specTarget);
@@ -125,10 +130,10 @@ const SettingsPage = () => {
     if (lsl >= usl) { toast.error("LSL must be less than USL"); return; }
     const updatedAt = new Date().toISOString().slice(0, 10);
     setSpecs((prev) => {
-      const filtered = prev.filter((s) => !(s.family === specFamily && s.year === specYear && s.quarter === specQuarter));
-      return [...filtered, { family: specFamily, year: specYear, quarter: specQuarter, lsl, usl, target, updatedAt }];
+      const filtered = prev.filter((s) => !(s.family === specBlend && s.year === specYear && s.quarter === specQuarter));
+      return [...filtered, { family: specBlend, year: specYear, quarter: specQuarter, lsl, usl, target, updatedAt }];
     });
-    toast.success(`Spec saved for ${specFamily} · ${specQuarter} ${specYear}`);
+    toast.success(`Spec saved for ${specBlend} · ${specQuarter} ${specYear}`);
   };
 
   const loadSpec = () => {
@@ -356,15 +361,19 @@ const SettingsPage = () => {
 
               <div className="settings-grid-4">
                 <div className="settings-field">
-                  <Label>Parameter</Label>
-                  <Dropdown value={specParameter} onValueChange={setSpecParameter} options={parameters} />
+                  <Label>Machine</Label>
+                  <Dropdown
+                    value={specMachine || machineOpts[0]?.value || ""}
+                    onValueChange={setSpecMachine}
+                    options={machineOpts}
+                  />
                 </div>
                 <div className="settings-field">
-                  <Label>Family</Label>
+                  <Label>Blend</Label>
                   <Dropdown
-                    value={specFamily}
-                    onValueChange={(v) => { setSpecFamily(v); setTimeout(loadSpec, 0); }}
-                    options={families}
+                    value={specBlend || blendOpts[0]?.value || ""}
+                    onValueChange={(v) => { setSpecBlend(v); setTimeout(loadSpec, 0); }}
+                    options={blendOpts}
                   />
                 </div>
                 <div className="settings-field">
@@ -590,6 +599,12 @@ const AlertConfigurator = () => {
   const [dailyUserInput, setDailyUserInput] = useState("");
   const [shiftUserInput, setShiftUserInput] = useState("");
 
+  const dropdownData = useAppSelector(selectDropdownData);
+  const unitToParamMap = (dropdownData?.common?.unitToParamMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const paramOpts: { value: string; label: string }[] = unitToParamMap[draft.unit]?.length
+    ? unitToParamMap[draft.unit]
+    : PARAMETERS.map((p) => ({ value: p, label: p }));
+
   const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
   const addDailyUser = () => {
     const v = dailyUserInput.trim();
@@ -730,7 +745,8 @@ const AlertConfigurator = () => {
                 <Dropdown value={draft.unit} onValueChange={(v) => {
                   const u = energyTree.find((x) => x.id === v);
                   const firstLine = u?.lines[0];
-                  setDraft({ ...draft, unit: v, line: firstLine?.id ?? "", machine: firstLine?.assets[0]?.id ?? "" });
+                  const firstParam = (unitToParamMap[v]?.[0]?.value) ?? PARAMETERS[0];
+                  setDraft({ ...draft, unit: v, line: firstLine?.id ?? "", machine: firstLine?.assets[0]?.id ?? "", parameter: firstParam });
                 }} options={energyTree.map((u) => ({ value: u.id, label: u.name }))} />
               </div>
               <div className="settings-field">
@@ -748,7 +764,7 @@ const AlertConfigurator = () => {
 
             <div className="settings-field">
               <Label>Parameter</Label>
-              <Dropdown value={draft.parameter} onValueChange={(v) => setDraft({ ...draft, parameter: v })} options={PARAMETERS.map((p) => ({ value: p, label: p }))} />
+              <Dropdown value={draft.parameter} onValueChange={(v) => setDraft({ ...draft, parameter: v })} options={paramOpts} />
             </div>
             <div className="settings-label-checkbox-row settings-field">
               <Checkbox id="useLimits" checked={draft.useLimits} onCheckedChange={(v) => setDraft({ ...draft, useLimits: v === true })} />

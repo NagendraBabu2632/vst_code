@@ -13,6 +13,7 @@ import {
 import {
   resetPageSelections,
   selectDropdownSelections,
+  selectDropdownData,
   buildProcessPayload,
 } from "@/redux/slices/dropdownSlice";
 import { motion } from "framer-motion";
@@ -273,22 +274,41 @@ const ProcessAnalysis = () => {
   const error = useAppSelector(selectProcessError);
   const processData = useAppSelector(selectProcessData);
   const selections = useAppSelector(selectDropdownSelections);
+  const dropdownData = useAppSelector(selectDropdownData);
 
   const period = selections.period;
 
-  // Reset this page's dropdowns to defaults on every mount
+  // On mount: set default selections from loaded dropdown data, then fire the initial fetch.
+  // After this, the API is only called when the user clicks Apply.
   useEffect(() => {
-    dispatch(resetPageSelections({
-      unit: "all", line: "all", machine: "all",
-      processParameter: "moistureS1", family: "all", period: "last7",
-    }));
-  }, [dispatch]);
+    const unitList          = (dropdownData?.common?.units                ?? []) as { value: string; label: string }[];
+    const unitToLineMap     = (dropdownData?.common?.unitToLineMapping     ?? {}) as Record<string, { value: string; label: string }[]>;
+    const lineToMachMap     = (dropdownData?.common?.lineToMachineMapping  ?? {}) as Record<string, { value: string; label: string }[]>;
+    const machineToBlendMap = (dropdownData?.common?.machineToBlendMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+    const unitToParamMap    = (dropdownData?.common?.unitToParamMapping    ?? {}) as Record<string, { value: string; label: string }[]>;
 
-  useEffect(() => {
-    dispatch(fetchProcessAnalysisData(buildProcessPayload(selections)));
-  // Re-fetch whenever any filter selection changes
+    const firstUnit = unitList[0]?.value ?? "PMD";
+    const firstLine = unitToLineMap[firstUnit]?.[0]?.value ?? "";
+
+    // Pick the first machine in the line that has blends
+    const machinesInLine = lineToMachMap[firstLine] ?? [];
+    const firstMachine = (
+      machinesInLine.find((m) => (machineToBlendMap[m.value] ?? []).length > 0) ??
+      machinesInLine[0]
+    )?.value ?? "";
+
+    const firstFamily = (machineToBlendMap[firstMachine] ?? [])[0]?.value ?? "CFT";
+    const firstParam  = unitToParamMap[firstUnit]?.[0]?.value ?? "Moisture";
+
+    const defaults = {
+      unit: firstUnit, line: firstLine, machine: firstMachine,
+      processParameter: firstParam, family: firstFamily, period: "last7",
+    };
+
+    dispatch(resetPageSelections(defaults));
+    dispatch(fetchProcessAnalysisData(buildProcessPayload({ ...selections, ...defaults })));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, selections.unit, selections.line, selections.machine, selections.shift, selections.period, selections.processParameter, selections.family]);
+  }, [dispatch]);
 
   if (loading) return <DashboardLayout><Loader message="Loading Process Data…" /></DashboardLayout>;
   if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
@@ -301,9 +321,12 @@ const ProcessAnalysis = () => {
         <ProcessFilters />
       </div>
       <div className="process-list">
-        {chartConfigs.map((config, i) => (
-          <SPCChart key={config.dataKey} config={config} delay={i * 0.1} period={period} />
-        ))}
+        {(() => {
+          const activeConfig = chartConfigs.find(
+            (c) => c.dataKey.toLowerCase() === selections.processParameter?.toLowerCase()
+          ) ?? chartConfigs[0];
+          return <SPCChart key={activeConfig.dataKey} config={activeConfig} delay={0} period={period} />;
+        })()}
       </div>
     </DashboardLayout>
   );

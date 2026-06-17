@@ -9,7 +9,9 @@ import {
   setDropdownSelection,
   selectDropdownSelections,
   selectDropdownData,
+  buildProcessPayload,
 } from "@/redux/slices/dropdownSlice";
+import { fetchProcessAnalysisData } from "@/redux/slices/processAnalysisSlice";
 
 const periodOptions = [
   { value: "today",     label: "Today" },
@@ -82,13 +84,55 @@ const ProcessFilters = () => {
   const [runTime, setRunTime] = useState<string>("");
 
   // Resolve option lists from DROPDOWN_DATA (fall back to static lists)
-  const units      = (dropdownData?.common?.units      ?? []) as { value: string; label: string }[];
-  const lines      = (dropdownData?.common?.lines      ?? []) as { value: string; label: string }[];
-  const machines   = (dropdownData?.common?.machines   ?? []) as { value: string; label: string }[];
-  const processParams = (dropdownData?.processAnalysis?.processParameter?.options ?? []) as { value: string; label: string }[];
-  const runningFamilies = (dropdownData?.processAnalysis?.familyRunning?.options ?? []) as { value: string; label: string }[];
-  const allFamilies     = (dropdownData?.common?.families ?? []) as { value: string; label: string }[];
-  const runningValues   = runningFamilies.map((f) => f.value);
+  const units = (dropdownData?.common?.units ?? []) as { value: string; label: string }[];
+
+  // Line options cascade from selected unit
+  const unitToLineMap = (dropdownData?.common?.unitToLineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const lines = (
+    selections.unit && unitToLineMap[selections.unit]
+      ? unitToLineMap[selections.unit]
+      : (dropdownData?.common?.lines ?? [])
+  ) as { value: string; label: string }[];
+
+  // Parameter options cascade from selected unit
+  const unitToParamMap = (dropdownData?.common?.unitToParamMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const processParams = (
+    selections.unit && unitToParamMap[selections.unit]
+      ? unitToParamMap[selections.unit]
+      : (dropdownData?.processAnalysis?.processParameter?.options ?? [])
+  ) as { value: string; label: string }[];
+
+  // Machine options cascade from selected line
+  const lineToMachineMap = (dropdownData?.common?.lineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const machines = (
+    selections.line && lineToMachineMap[selections.line]
+      ? lineToMachineMap[selections.line]
+      : (dropdownData?.common?.machines ?? [])
+  ) as { value: string; label: string }[];
+
+  // Blend options cascade from selected machine
+  const machineToBlendMap = (dropdownData?.common?.machineToBlendMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const machineBlends = (
+    selections.machine && machineToBlendMap[selections.machine]?.length
+      ? machineToBlendMap[selections.machine]
+      : (dropdownData?.common?.families ?? [])
+  ) as { value: string; label: string }[];
+
+  // Helper: first machine in a line that has blends
+  const firstMachineWithBlends = (lineName: string): string => {
+    const list = lineToMachineMap[lineName] ?? [];
+    return (
+      list.find((m) => (machineToBlendMap[m.value] ?? []).length > 0)?.value ??
+      list[0]?.value ?? ""
+    );
+  };
+
+  // Running blends — only those available for the selected machine
+  const runningCandidates = (dropdownData?.processAnalysis?.blendRunning?.options ?? []) as { value: string; label: string }[];
+  const availableBlendValues = new Set(machineBlends.map((b) => b.value));
+  const runningFamilies  = runningCandidates.filter((f) => availableBlendValues.has(f.value));
+  const runningValues    = new Set(runningFamilies.map((f) => f.value));
+  const nonRunningBlends = machineBlends.filter((f) => !runningValues.has(f.value));
 
   const set = (key: Parameters<typeof setDropdownSelection>[0]["key"]) =>
     (value: string) => dispatch(setDropdownSelection({ key, value }));
@@ -99,23 +143,28 @@ const ProcessFilters = () => {
   );
 
   const handleApply = () => {
-    if (!selections.family) {
-      toast.error("Please select a Family");
+    if (selections.unit !== "SMD" && !selections.family) {
+      toast.error("Please select a Blend");
       return;
     }
+    dispatch(fetchProcessAnalysisData(buildProcessPayload(selections)));
     toast.success("Filters applied", {
-      description: `${selections.family} · ${
+      description: `${selections.machine} · ${selections.family || "—"} · ${
         periodOptions.find((p) => p.value === selections.period)?.label ?? selections.period
       }${runTime ? ` · ${runTime}` : " · All runs"}`,
     });
   };
 
   const handleReset = () => {
-    set("unit")("all");
-    set("line")("all");
-    set("machine")("all");
-    set("processParameter")(processParams[0]?.value ?? "moistureS1");
-    set("family")(allFamilies[0]?.value ?? "all");
+    const firstUnit    = units[0]?.value ?? "PMD";
+    const firstLine    = unitToLineMap[firstUnit]?.[0]?.value ?? "";
+    const firstMachine = firstMachineWithBlends(firstLine);
+    const firstBlend   = (machineToBlendMap[firstMachine] ?? [])[0]?.value ?? "";
+    set("unit")(firstUnit);
+    set("line")(firstLine);
+    set("machine")(firstMachine);
+    set("family")(firstBlend);
+    set("processParameter")(unitToParamMap[firstUnit]?.[0]?.value ?? "Moisture");
     set("period")("last7");
     setRunTime("");
   };
@@ -124,9 +173,9 @@ const ProcessFilters = () => {
     <div className="process-filters">
       {/* Asset filters */}
       {[
-        { label: "Unit Name",      value: selections.unit,             setter: set("unit"),             opts: units.map((u) => ({ value: u.value, label: u.label })) },
-        { label: "Line Name",      value: selections.line,             setter: set("line"),             opts: lines.map((l) => ({ value: l.value, label: l.label })) },
-        { label: "Machine Name",   value: selections.machine,          setter: set("machine"),          opts: machines.map((m) => ({ value: m.value, label: m.label })) },
+        { label: "Unit Name",      value: selections.unit,  setter: (v: string) => { const fl = unitToLineMap[v]?.[0]?.value ?? ""; const fm = firstMachineWithBlends(fl); set("unit")(v); set("line")(fl); set("machine")(fm); set("family")((machineToBlendMap[fm] ?? [])[0]?.value ?? ""); set("processParameter")(unitToParamMap[v]?.[0]?.value ?? "Moisture"); }, opts: units.map((u) => ({ value: u.value, label: u.label })) },
+        { label: "Line Name",      value: selections.line,  setter: (v: string) => { const fm = firstMachineWithBlends(v); set("line")(v); set("machine")(fm); set("family")((machineToBlendMap[fm] ?? [])[0]?.value ?? ""); }, opts: lines.map((l) => ({ value: l.value, label: l.label })) },
+        { label: "Machine Name",   value: selections.machine, setter: (v: string) => { set("machine")(v); set("family")((machineToBlendMap[v] ?? [])[0]?.value ?? ""); setRunTime(""); }, opts: machines.map((m) => ({ value: m.value, label: m.label })) },
         { label: "Parameter Name", value: selections.processParameter, setter: set("processParameter"), opts: processParams.map((p) => ({ value: p.value, label: p.label })) },
       ].map((f) => (
         <div key={f.label} className="process-filter-field">
@@ -140,33 +189,6 @@ const ProcessFilters = () => {
         </div>
       ))}
 
-      {/* Family */}
-      <div className="process-filter-field--family">
-        <label className="process-filter-label">Family</label>
-        <Dropdown
-          value={selections.family}
-          onValueChange={(v) => { set("family")(v); setRunTime(""); }}
-          placeholder="Select family…"
-        >
-          <div className="process-filter-group-header">Running</div>
-          {runningFamilies.map((f) => (
-            <DropdownItem key={f.value} value={f.value}>
-              <span className="process-filter-option-row">
-                <span className="process-filter-dot process-filter-dot--success" />
-                {f.label}
-                <span className="process-filter-badge--running">Running</span>
-              </span>
-            </DropdownItem>
-          ))}
-          <div className="process-filter-group-header--divided">All Families</div>
-          {allFamilies
-            .filter((f) => !runningValues.includes(f.value))
-            .map((f) => (
-              <DropdownItem key={f.value} value={f.value}>{f.label}</DropdownItem>
-            ))}
-        </Dropdown>
-      </div>
-
       {/* Period */}
       <div className="process-filter-field--period">
         <label className="process-filter-label">Period</label>
@@ -178,12 +200,43 @@ const ProcessFilters = () => {
         />
       </div>
 
-      {/* Family Run Times — appears once Family + Period selected */}
-      {selections.family && selections.period && runTimes.length > 0 && (
+      {/* Blend — hidden for SMD unit */}
+      {selections.unit !== "SMD" && (
+        <div className="process-filter-field--family">
+          <label className="process-filter-label">Blend</label>
+          <Dropdown
+            value={selections.family}
+            onValueChange={(v) => { set("family")(v); setRunTime(""); }}
+            placeholder="Select blend…"
+          >
+            {runningFamilies.length > 0 && (
+              <>
+                <div className="process-filter-group-header">Running</div>
+                {runningFamilies.map((f) => (
+                  <DropdownItem key={f.value} value={f.value}>
+                    <span className="process-filter-option-row">
+                      <span className="process-filter-dot process-filter-dot--success" />
+                      {f.label}
+                      <span className="process-filter-badge--running">Running</span>
+                    </span>
+                  </DropdownItem>
+                ))}
+                <div className="process-filter-group-header--divided">All Blends</div>
+              </>
+            )}
+            {nonRunningBlends.map((f) => (
+              <DropdownItem key={f.value} value={f.value}>{f.label}</DropdownItem>
+            ))}
+          </Dropdown>
+        </div>
+      )}
+
+      {/* Family Run Times — hidden for SMD unit, appears once Family + Period selected */}
+      {selections.unit !== "SMD" && selections.family && selections.period && runTimes.length > 0 && (
         <div className="process-filter-field--runtimes">
           <label className="process-filter-run-label">
             <Clock className="process-filter-run-label__icon" />
-            Family Run Times
+            Blend Run Times
             <span className="process-filter-badge--count">{runTimes.length}</span>
           </label>
           <Dropdown

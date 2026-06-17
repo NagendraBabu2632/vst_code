@@ -71,12 +71,31 @@ const ReportsPage = () => {
   const [filterParam, setFilterParam] = useState("All");
 
   // Resolve option lists from DROPDOWN_DATA
-  const unitOpts    = (dropdownData?.common?.units      ?? []) as { value: string; label: string }[];
-  const lineOpts    = (dropdownData?.common?.lines      ?? []) as { value: string; label: string }[];
-  const machineOpts = (dropdownData?.common?.machines   ?? []) as { value: string; label: string }[];
-  const familyOpts  = (dropdownData?.common?.families   ?? []) as { value: string; label: string }[];
-  const shiftOpts   = (dropdownData?.common?.shifts     ?? []) as { value: string; label: string }[];
-  const paramOpts   = (dropdownData?.common?.parameters ?? []) as { value: string; label: string }[];
+  const unitOpts   = (dropdownData?.common?.units      ?? []) as { value: string; label: string }[];
+  const familyOpts = (dropdownData?.common?.families   ?? []) as { value: string; label: string }[];
+  const shiftOpts  = (dropdownData?.common?.shifts     ?? []) as { value: string; label: string }[];
+  const unitToParamMap = (dropdownData?.common?.unitToParamMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const paramOpts = (
+    selections.unit && unitToParamMap[selections.unit]?.length
+      ? unitToParamMap[selections.unit]
+      : (dropdownData?.common?.parameters ?? [])
+  ) as { value: string; label: string }[];
+
+  // Line options cascade from selected unit
+  const unitToLineMap = (dropdownData?.common?.unitToLineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const lineOpts = (
+    selections.unit && unitToLineMap[selections.unit]
+      ? unitToLineMap[selections.unit]
+      : (dropdownData?.common?.lines ?? [])
+  ) as { value: string; label: string }[];
+
+  // Machine options cascade from selected line
+  const lineToMachineMap = (dropdownData?.common?.lineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const machineOpts = (
+    selections.line && lineToMachineMap[selections.line]
+      ? lineToMachineMap[selections.line]
+      : (dropdownData?.common?.machines ?? [])
+  ) as { value: string; label: string }[];
 
   const set = (key: Parameters<typeof setDropdownSelection>[0]["key"]) =>
     (value: string) => { dispatch(setDropdownSelection({ key, value })); setPage(1); };
@@ -94,10 +113,25 @@ const ReportsPage = () => {
       dispatch(setDropdownSelection({ key: "dateRangeTo", value: format(endDate, "yyyy-MM-dd") }));
   }, [dispatch, period, endDate]);
 
-  // Reset this page's dropdowns to defaults on every mount
+  // Auto-select first parameter when unit changes
   useEffect(() => {
-    dispatch(resetPageSelections({ unit: "all", line: "all", machine: "all", family: "all", shift: "all", period: "today" }));
-  }, [dispatch]);
+    if (!dropdownData) return;
+    const first = paramOpts[0]?.value;
+    if (first) setFilterParam(first);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selections.unit, dropdownData]);
+
+  // Reset this page's dropdowns once dropdown data is available
+  useEffect(() => {
+    if (!dropdownData) return;
+    const firstUnit = unitOpts[0]?.value ?? "PMD";
+    const firstLine = unitToLineMap[firstUnit]?.[0]?.value ?? "";
+    const firstMachine = lineToMachineMap[firstLine]?.[0]?.value ?? "";
+    const firstFamily = familyOpts[0]?.value ?? "";
+    const firstShift  = shiftOpts[0]?.value  ?? "";
+    dispatch(resetPageSelections({ unit: firstUnit, line: firstLine, machine: firstMachine, family: firstFamily, shift: firstShift, period: "today" }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, dropdownData]);
 
   useEffect(() => {
     dispatch(fetchReportsData(buildReportsPayload(selections)));
@@ -175,8 +209,8 @@ const ReportsPage = () => {
 
   const getFileName = useCallback(() => {
     const typeLabel  = reportType.charAt(0).toUpperCase() + reportType.slice(1);
-    const unitPart   = selections.unit    !== "all" ? `_${selections.unit.replace(/\s/g, "")}`    : "";
-    const linePart   = selections.line    !== "all" ? `_${selections.line.replace(/\s/g, "")}`    : "";
+    const unitPart   = selections.unit ? `_${selections.unit.replace(/\s/g, "")}` : "";
+    const linePart   = selections.line ? `_${selections.line.replace(/\s/g, "")}` : "";
     const datePart   = `_${format(new Date(), "yyyyMMdd")}`;
     return `${typeLabel}Report${unitPart}${linePart}${datePart}`;
   }, [reportType, selections.unit, selections.line]);
@@ -277,10 +311,10 @@ const ReportsPage = () => {
         <div className="reports-filters">
           {/* Global filters — stored in Redux */}
           {[
-            { label: "Unit",    value: selections.unit,    setter: set("unit"),    opts: unitOpts.length   ? unitOpts   : [{ value: "All", label: "All" }] },
-            { label: "Line",    value: selections.line,    setter: set("line"),    opts: lineOpts.length   ? lineOpts   : [{ value: "All", label: "All" }] },
+            { label: "Unit",    value: selections.unit,    setter: (v: string) => { const fl = unitToLineMap[v]?.[0]?.value ?? ""; const fm = lineToMachineMap[fl]?.[0]?.value ?? ""; set("unit")(v); set("line")(fl); set("machine")(fm); }, opts: unitOpts.length   ? unitOpts   : [{ value: "PMD", label: "PMD" }] },
+            { label: "Line",    value: selections.line,    setter: (v: string) => { set("line")(v); set("machine")(lineToMachineMap[v]?.[0]?.value ?? ""); }, opts: lineOpts.length   ? lineOpts   : [{ value: "All", label: "All" }] },
             { label: "Machine", value: selections.machine, setter: set("machine"), opts: machineOpts.length ? machineOpts : [{ value: "All", label: "All" }] },
-            { label: "Family",  value: selections.family,  setter: set("family"),  opts: familyOpts.length ? familyOpts : [{ value: "All", label: "All" }] },
+            { label: "Family",  value: selections.family,  setter: set("family"),  opts: familyOpts.length ? familyOpts : [{ value: "CFT", label: "CFT" }] },
             { label: "Shift",   value: selections.shift,   setter: set("shift"),   opts: shiftOpts.length  ? shiftOpts  : [{ value: "All", label: "All" }] },
           ].map((f) => (
             <div key={f.label} className="reports-filter">
