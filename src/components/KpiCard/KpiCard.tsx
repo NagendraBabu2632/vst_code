@@ -8,7 +8,7 @@ interface KpiCardProps {
   unit?: string;
   subtitle?: string;
   icon: LucideIcon;
-  trend?: { value: number; label: string };
+  trend?: { value: number; label: string; isPositive?: boolean };
   accentColor?: string;
   onClick?: () => void;
 }
@@ -59,7 +59,9 @@ const KpiCard = ({
         <div className="kpi-card__trend">
           <span
             className={`kpi-card__trend-value ${
-              trend.value >= 0 ? "kpi-card__trend-value--up" : "kpi-card__trend-value--down"
+              (trend.isPositive ?? trend.value >= 0)
+                ? "kpi-card__trend-value--up"
+                : "kpi-card__trend-value--down"
             }`}
           >
             {trend.value >= 0 ? "↑" : "↓"} {Math.abs(trend.value)}%

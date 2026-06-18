@@ -6,7 +6,6 @@ export interface KpiData {
   productionOutput: number;
   avgMoisture: number;
   avgHumidity: number;
-  avgTemperature: number;
 }
 
 export interface EnergyTrendPoint {
@@ -23,6 +22,56 @@ export interface EquipmentEnergy {
   prevConsumption: number;
   status: string;
 }
+
+// ─── Executive Summary API response types ─────────────────────────────────────
+
+export interface ExecSummaryKpi {
+  totalKWH: number;
+  totalCost: number;
+  utilityKWH: number;
+  kwhChangePct: number;
+  costChangePct: number;
+  utilityKwhChangePct: number;
+  isTotalKwhUp: boolean;
+  isTotalCostUp: boolean;
+  isUtilityKwhUp: boolean;
+  avgMoisture: number;
+  avgHumidity: number;
+  avgTemperature: number;
+}
+
+export interface ExecSecData {
+  pmdSEC: number;
+  smdSEC: number;
+  pmdSECChangePct: number;
+  smdSECChangePct: number;
+  isPmdSECUp: boolean;
+  isSmdSECUp: boolean;
+}
+
+export interface ExecTrendPoint {
+  label: string;
+  kwh: number;
+}
+
+export interface ExecTrendData {
+  granularity: 'hourly' | 'hour' | 'daily' | 'day';
+  data: ExecTrendPoint[];
+}
+
+export interface ExecConsumerItem {
+  rank: number;
+  feederName: string;
+  zone: string;
+  kwh: number;
+  cost: number;
+}
+
+export interface ExecTopConsumersData {
+  kpiType: 'top5' | 'pollution';
+  items: ExecConsumerItem[];
+}
+
 
 export const dashboardApi = {
   async getKpiData(): Promise<KpiData> {

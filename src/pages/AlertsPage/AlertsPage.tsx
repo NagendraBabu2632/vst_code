@@ -225,7 +225,6 @@ const AlertsPage = () => {
     setAckComment("");
   };
 
-  if (loading) return <DashboardLayout><Loader message="Loading Alerts…" /></DashboardLayout>;
   if (error)   return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
   return (
@@ -273,6 +272,7 @@ const AlertsPage = () => {
         </div>
       </div>
 
+      {loading ? <Loader message="Loading Alerts…" /> : <>
       <div className="alerts-kpi-grid">
         {[
           { label: "Total Alerts", value: kpi.total,        icon: <Eye />,           mod: "primary" },
@@ -340,6 +340,7 @@ const AlertsPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>}
     </DashboardLayout>
   );
 };

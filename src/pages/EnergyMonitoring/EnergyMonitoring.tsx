@@ -51,7 +51,6 @@ const EnergyMonitoring = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, selections.unit, selections.line, selections.machine, selections.shift, selections.period]);
 
-  if (loading) return <DashboardLayout><Loader message="Loading Energy Data…" /></DashboardLayout>;
   if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
   return (
@@ -87,16 +86,18 @@ const EnergyMonitoring = () => {
         </div>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="chart-container">
-        <div className="energy-chart-head">
-          <h3 className="energy-chart-title">
-            {period === "today" || period === "yesterday"
-              ? "Hourly Consumption (kWh) — Unit › Line › Asset"
-              : "Daily Consumption (kWh) — Unit › Line › Asset"}
-          </h3>
-        </div>
-        <EnergyTreeTable period={period} />
-      </motion.div>
+      {loading ? <Loader message="Loading Energy Data…" /> : (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="chart-container">
+          <div className="energy-chart-head">
+            <h3 className="energy-chart-title">
+              {period === "today" || period === "yesterday"
+                ? "Hourly Consumption (kWh) — Unit › Line › Asset"
+                : "Daily Consumption (kWh) — Unit › Line › Asset"}
+            </h3>
+          </div>
+          <EnergyTreeTable period={period} />
+        </motion.div>
+      )}
     </DashboardLayout>
   );
 };

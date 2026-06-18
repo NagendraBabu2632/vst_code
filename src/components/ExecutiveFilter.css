@@ -232,6 +232,11 @@
   color: var(--foreground);
 }
 
+/* ── Week dropdown trigger width ──────────────────────────────────── */
+.exec-filter__week-dropdown {
+  min-width: 180px;
+}
+
 /* ── Week dropdown item ────────────────────────────────────────────── */
 .exec-filter__week-item {
   display: flex;

@@ -310,9 +310,7 @@ const ProcessAnalysis = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
 
-  if (loading) return <DashboardLayout><Loader message="Loading Process Data…" /></DashboardLayout>;
   if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
-  if (!processData.length) return null;
 
   return (
     <DashboardLayout>
@@ -320,14 +318,16 @@ const ProcessAnalysis = () => {
         <h2 className="page-title">Process Analysis</h2>
         <ProcessFilters />
       </div>
-      <div className="process-list">
-        {(() => {
-          const activeConfig = chartConfigs.find(
-            (c) => c.dataKey.toLowerCase() === selections.processParameter?.toLowerCase()
-          ) ?? chartConfigs[0];
-          return <SPCChart key={activeConfig.dataKey} config={activeConfig} delay={0} period={period} />;
-        })()}
-      </div>
+      {loading ? <Loader message="Loading Process Data…" /> : processData.length ? (
+        <div className="process-list">
+          {(() => {
+            const activeConfig = chartConfigs.find(
+              (c) => c.dataKey.toLowerCase() === selections.processParameter?.toLowerCase()
+            ) ?? chartConfigs[0];
+            return <SPCChart key={activeConfig.dataKey} config={activeConfig} delay={0} period={period} />;
+          })()}
+        </div>
+      ) : null}
     </DashboardLayout>
   );
 };

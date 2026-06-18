@@ -1,25 +1,31 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/services/api";
-import type { KpiData, EnergyTrendPoint, EquipmentEnergy } from "@/services/dashboardApi";
-import type { Alert } from "@/data/mockData";
+import type {
+  ExecSummaryKpi,
+  ExecSecData,
+  ExecTrendData,
+  ExecTopConsumersData,
+} from "@/services/dashboardApi";
 import type { ExecApiPayload } from "@/redux/slices/dropdownSlice";
 
 interface ExecutiveSummaryState {
-  kpiData: KpiData | null;
-  energyTrend: EnergyTrendPoint[];
-  equipmentEnergy: EquipmentEnergy[];
-  alerts: Alert[];
-  loading: boolean;
-  error: string | null;
+  summaryKpi:    ExecSummaryKpi | null;
+  secData:       ExecSecData | null;
+  trendData:     ExecTrendData | null;
+  top5Data:      ExecTopConsumersData | null;
+  pollutionData: ExecTopConsumersData | null;
+  loading:       boolean;
+  error:         string | null;
 }
 
 const initialState: ExecutiveSummaryState = {
-  kpiData: null,
-  energyTrend: [],
-  equipmentEnergy: [],
-  alerts: [],
-  loading: false,
-  error: null,
+  summaryKpi:    null,
+  secData:       null,
+  trendData:     null,
+  top5Data:      null,
+  pollutionData: null,
+  loading:       false,
+  error:         null,
 };
 
 export const fetchExecutiveSummaryData = createAsyncThunk(
@@ -44,11 +50,12 @@ const executiveSummarySlice = createSlice({
         state.error = null;
       })
       .addCase(fetchExecutiveSummaryData.fulfilled, (state, action) => {
-        state.loading = false;
-        state.kpiData = action.payload.kpiData;
-        state.energyTrend = action.payload.energyTrend;
-        state.equipmentEnergy = action.payload.equipmentEnergy;
-        state.alerts = action.payload.alerts;
+        state.loading      = false;
+        state.summaryKpi   = action.payload.summary;
+        state.secData      = action.payload.sec;
+        state.trendData    = action.payload.trend;
+        state.top5Data     = action.payload.top5;
+        state.pollutionData = action.payload.pollution;
       })
       .addCase(fetchExecutiveSummaryData.rejected, (state, action) => {
         state.loading = false;
@@ -59,16 +66,12 @@ const executiveSummarySlice = createSlice({
 
 export default executiveSummarySlice.reducer;
 
-// Selectors
-export const selectExecLoading = (s: { executiveSummary: ExecutiveSummaryState }) =>
-  s.executiveSummary.loading;
-export const selectExecError = (s: { executiveSummary: ExecutiveSummaryState }) =>
-  s.executiveSummary.error;
-export const selectKpiData = (s: { executiveSummary: ExecutiveSummaryState }) =>
-  s.executiveSummary.kpiData;
-export const selectEnergyTrend = (s: { executiveSummary: ExecutiveSummaryState }) =>
-  s.executiveSummary.energyTrend;
-export const selectEquipmentEnergy = (s: { executiveSummary: ExecutiveSummaryState }) =>
-  s.executiveSummary.equipmentEnergy;
-export const selectExecAlerts = (s: { executiveSummary: ExecutiveSummaryState }) =>
-  s.executiveSummary.alerts;
+// ─── Selectors ────────────────────────────────────────────────────────────────
+type State = { executiveSummary: ExecutiveSummaryState };
+export const selectExecLoading    = (s: State) => s.executiveSummary.loading;
+export const selectExecError      = (s: State) => s.executiveSummary.error;
+export const selectSummaryKpi     = (s: State) => s.executiveSummary.summaryKpi;
+export const selectSecData        = (s: State) => s.executiveSummary.secData;
+export const selectTrendData      = (s: State) => s.executiveSummary.trendData;
+export const selectTop5Data       = (s: State) => s.executiveSummary.top5Data;
+export const selectPollutionData  = (s: State) => s.executiveSummary.pollutionData;

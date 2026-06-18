@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import Dropdown, { DropdownItem } from "@/components/Dropdown";
+import Dropdown from "@/components/Dropdown";
 
 export type ExecMode = "day" | "week" | "month";
 
@@ -195,24 +195,16 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
               value={value.week}
               onValueChange={(v) => onChange({ ...value, week: v })}
               placeholder="Select week"
-              triggerClassName="w-[140px]"
-            >
-              {weekOptions.map((w, i) => {
+              triggerClassName="exec-filter__week-dropdown"
+              options={weekOptions.map((w, i) => {
                 const monthStart = startOfMonth(value.date);
                 const monthEnd = endOfMonth(value.date);
-                return (
-                  <DropdownItem key={w} value={w}>
-                    <span className="exec-filter__week-item">
-                      <span className="exec-filter__week-label">{w}</span>
-                      <span className="exec-filter__week-range">
-                        {format(monthStart, "MMM")} {i * 7 + 1}–
-                        {Math.min((i + 1) * 7, monthEnd.getDate())}
-                      </span>
-                    </span>
-                  </DropdownItem>
-                );
+                return {
+                  value: w,
+                  label: `${w}  ·  ${format(monthStart, "MMM")} ${i * 7 + 1}–${Math.min((i + 1) * 7, monthEnd.getDate())}`,
+                };
               })}
-            </Dropdown>
+            />
           </div>
         )}
 

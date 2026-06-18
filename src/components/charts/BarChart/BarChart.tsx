@@ -92,7 +92,7 @@ export const Top5BarChart = ({ data, mode }: Top5BarChartProps) => {
           {data.map((d, i) => {
             const by = y(d.name) ?? 0;
             const bh = Math.min(28, y.bandwidth());
-            const bw = x(d[dataKey]);
+            const bw = Math.max(0, x(d[dataKey]) || 0);
             return (
               <g key={d.name}>
                 <rect
@@ -207,7 +207,7 @@ export const AssetEnergyBarChart = ({ data, mode }: AssetEnergyBarChartProps) =>
           ))}
           {data.map((d, i) => {
             const by = y(d.name) ?? 0;
-            const bw = x(d[mode]);
+            const bw = Math.max(0, x(d[mode]) || 0);
             return (
               <rect
                 key={d.name}
@@ -300,7 +300,7 @@ export const SPCHistogramChart = ({ data, lineColor, unit, lsl, usl, showLimits 
           ))}
           {data.map((d) => {
             const bx = x(String(d.range)) ?? 0;
-            const bh = innerH - y(d.count);
+            const bh = Math.max(0, innerH - y(d.count));
             return (
               <rect
                 key={d.range}

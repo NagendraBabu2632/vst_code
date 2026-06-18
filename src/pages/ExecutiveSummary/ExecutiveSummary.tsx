@@ -1,5 +1,5 @@
 import './ExecutiveSummary.css';
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import KpiCard from "@/components/KpiCard/KpiCard";
@@ -11,20 +11,30 @@ import {
   fetchExecutiveSummaryData,
   selectExecLoading,
   selectExecError,
-  selectKpiData,
-  selectEnergyTrend,
-  selectEquipmentEnergy,
-  selectExecAlerts,
+  selectSummaryKpi,
+  selectSecData,
+  selectTrendData,
+  selectTop5Data,
 } from "@/redux/slices/executiveSummarySlice";
+import { fetchAlertsData, selectAlerts } from "@/redux/slices/alertsSlice";
+import type { ExecApiPayload } from "@/redux/slices/dropdownSlice";
 import {
-  Zap, IndianRupee, Gauge, Droplets, Wind, AlertTriangle,
-  Trophy, TrendingUp, TrendingDown, BarChart3, Table2, Factory,
+  Zap, IndianRupee, Gauge, Droplets, Wind,
+  Trophy, TrendingDown, BarChart3, Table2, Factory, Bell,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { EnergyTrendAreaChart } from "../../components/charts/AreaChart/AreaChart";
 import { Top5BarChart } from "../../components/charts/BarChart/BarChart";
 
 const MOISTURE_SPEC = { lsl: 11.5, target: 12.5, usl: 13.5 };
+
+const MoistureFillBar = ({ pct, status }: { pct: number; status: string }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.style.setProperty('--moisture-pct', `${pct}%`);
+  }, [pct]);
+  return <div ref={ref} className={`exec-moisture-fill exec-moisture-fill--${status}`} />;
+};
 
 const getMoistureStatus = (v: number) => {
   if (v < MOISTURE_SPEC.lsl || v > MOISTURE_SPEC.usl) return "critical";
@@ -33,8 +43,7 @@ const getMoistureStatus = (v: number) => {
   return "ok";
 };
 
-
-const buildExecApiPayload = (filter: ExecFilterValue) => {
+const buildExecApiPayload = (filter: ExecFilterValue): ExecApiPayload => {
   const fmt = (d: Date) => format(d, "yyyy-MM-dd");
   if (filter.mode === "day") {
     return {
@@ -67,12 +76,13 @@ const ExecutiveSummary = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const loading = useAppSelector(selectExecLoading);
-  const error = useAppSelector(selectExecError);
-  const kpiData = useAppSelector(selectKpiData);
-  const energyTrendData = useAppSelector(selectEnergyTrend);
-  const equipmentEnergyData = useAppSelector(selectEquipmentEnergy);
-  const alertsData = useAppSelector(selectExecAlerts);
+  const loading      = useAppSelector(selectExecLoading);
+  const error        = useAppSelector(selectExecError);
+  const summaryKpi   = useAppSelector(selectSummaryKpi);
+  const secData      = useAppSelector(selectSecData);
+  const trendData    = useAppSelector(selectTrendData);
+  const top5Data     = useAppSelector(selectTop5Data);
+  const alerts       = useAppSelector(selectAlerts);
 
   const [execFilter, setExecFilter] = useState<ExecFilterValue>({
     mode: "day",
@@ -84,100 +94,147 @@ const ExecutiveSummary = () => {
   const [top5Mode, setTop5Mode] = useState<Top5Mode>("consumption");
   const [top5View, setTop5View] = useState<Top5View>("chart");
 
-  const handleExecFilterChange = (v: ExecFilterValue) => setExecFilter(v);
-
   useEffect(() => {
     dispatch(fetchExecutiveSummaryData(buildExecApiPayload(execFilter)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, execFilter.mode, execFilter.date.getTime(), execFilter.week, execFilter.month, execFilter.shifts.join(",")]);
 
-  // Derived values — computed only when data is available
-  const { top5Consumers, secSmdValue, secPmdValue, secUtilityValue, moistureSensors, moistureMax } =
-    useMemo(() => {
-      if (!kpiData || !equipmentEnergyData.length) {
-        return {
-          top5Consumers: [], secSmdValue: 0, secPmdValue: 0,
-          secUtilityValue: 0, moistureSensors: [], moistureMax: 15,
-        };
-      }
-      const totalConsumption = equipmentEnergyData.reduce((s, e) => s + e.consumption, 0);
-      const totalCost = equipmentEnergyData.reduce((s, e) => s + e.cost, 0);
-      const top5 = [...equipmentEnergyData]
-        .sort((a, b) => b.consumption - a.consumption)
-        .slice(0, 5)
-        .map((eq, i) => ({
-          rank: i + 1,
-          name: eq.equipment,
-          consumption: eq.consumption,
-          cost: eq.cost,
-          line: eq.line,
-          status: eq.status,
-          contribution: +((eq.consumption / totalConsumption) * 100).toFixed(1),
-          costContribution: +((eq.cost / totalCost) * 100).toFixed(1),
-          trend: eq.consumption - eq.prevConsumption,
-          trendPct: +(((eq.consumption - eq.prevConsumption) / eq.prevConsumption) * 100).toFixed(1),
-        }));
+  useEffect(() => {
+    dispatch(fetchAlertsData());
+  }, [dispatch]);
 
-      const pmdProductionTons = Math.max(1, +(kpiData.productionOutput / 5).toFixed(0));
-      const sensors = [
-        { name: "M1", value: +(kpiData.avgMoisture - 0.4).toFixed(2) },
-        { name: "M2", value: +(kpiData.avgMoisture - 0.1).toFixed(2) },
-        { name: "M3", value: +(kpiData.avgMoisture + 0.2).toFixed(2) },
-        { name: "M4", value: +(kpiData.avgMoisture + 0.6).toFixed(2) },
-      ];
+  // ── Derived values ────────────────────────────────────────────────────────
 
-      return {
-        top5Consumers: top5,
-        secSmdValue: +(kpiData.totalEnergy / kpiData.productionOutput).toFixed(2),
-        secPmdValue: +(kpiData.totalEnergy / pmdProductionTons).toFixed(2),
-        secUtilityValue: +(kpiData.totalEnergy * 0.22).toFixed(0),
-        moistureSensors: sensors,
-        moistureMax: Math.max(...sensors.map((s) => s.value), MOISTURE_SPEC.usl),
-      };
-    }, [kpiData, equipmentEnergyData]);
+  // Trend chart data: map { label, kwh } → { time, actual, target }
+  const trendChartData = useMemo(
+    () => (trendData?.data ?? []).map((p) => ({ time: p.label, actual: p.kwh, target: 380 })),
+    [trendData]
+  );
 
-  const chartTitle =
-    execFilter.mode === "day" ? "Energy Consumption Trend (Day)" :
-    execFilter.mode === "week" ? "Energy Consumption Trend (Weekly)" :
-    "Energy Consumption Trend (Monthly)";
+  // Top-5 items enriched with contribution % and trend placeholders
+  const top5Items = useMemo(() => {
+    const items = top5Data?.items ?? [];
+    const totalKwh  = items.reduce((s, i) => s + i.kwh, 0) || 1;
+    const totalCost = items.reduce((s, i) => s + i.cost, 0) || 1;
+    return items.map((item) => ({
+      rank: item.rank,
+      name: item.feederName,
+      line: item.zone,
+      consumption: item.kwh,
+      cost: item.cost,
+      contribution:     +((item.kwh  / totalKwh)  * 100).toFixed(1),
+      costContribution: +((item.cost / totalCost) * 100).toFixed(1),
+      trend: 0,
+      trendPct: 0,
+      status: "Running",
+    }));
+  }, [top5Data]);
 
   const sortedTop5 = useMemo(() => {
     const key = top5Mode === "consumption" ? "consumption" : "cost";
-    return [...top5Consumers].sort((a, b) => (b as any)[key] - (a as any)[key]).map((item, i) => ({ ...item, rank: i + 1 }));
-  }, [top5Mode, top5Consumers]);
+    return [...top5Items].sort((a, b) => (b as any)[key] - (a as any)[key]).map((item, i) => ({ ...item, rank: i + 1 }));
+  }, [top5Mode, top5Items]);
 
-  const validAlerts = useMemo(
-    () => alertsData.filter((a) => ["Moisture", "Humidity", "Temperature"].includes(a.parameter as string)),
-    [alertsData]
-  );
-  const alertCounts = useMemo(() => ({
-    total: validAlerts.length,
-    critical: validAlerts.filter((a) => a.severity === "Critical").length,
-    warning: validAlerts.filter((a) => a.severity === "Warning").length,
-  }), [validAlerts]);
+  // Moisture sensor rows derived from summaryKpi.avgMoisture
+  const { moistureSensors, moistureMax } = useMemo(() => {
+    if (!summaryKpi) return { moistureSensors: [], moistureMax: 15 };
+    const base = summaryKpi.avgMoisture;
+    const sensors = [
+      { name: "M1", value: +(base - 0.4).toFixed(2) },
+      { name: "M2", value: +(base - 0.1).toFixed(2) },
+      { name: "M3", value: +(base + 0.2).toFixed(2) },
+      { name: "M4", value: +(base + 0.6).toFixed(2) },
+    ];
+    return { moistureSensors: sensors, moistureMax: Math.max(...sensors.map((s) => s.value), MOISTURE_SPEC.usl) };
+  }, [summaryKpi]);
 
-  if (loading) return <DashboardLayout><Loader message="Loading Executive Summary…" /></DashboardLayout>;
-  if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
-  if (!kpiData) return null;
+  const alertKpi = useMemo(() => ({
+    total:        alerts.length,
+    critical:     alerts.filter((a) => a.severity === "Critical").length,
+    warning:      alerts.filter((a) => a.severity === "Warning").length,
+    acknowledged: alerts.filter((a) => a.acknowledged).length,
+  }), [alerts]);
+
+  const chartTitle =
+    execFilter.mode === "day"   ? "Energy Consumption Trend (Day)"     :
+    execFilter.mode === "week"  ? "Energy Consumption Trend (Weekly)"  :
+    "Energy Consumption Trend (Monthly)";
+
+  if (error)   return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
   return (
     <DashboardLayout>
       <div className="exec-filter-bar">
         <h2 className="page-title">Executive Summary</h2>
         <div className="exec-filter-bar-right">
-          <ExecutiveFilter value={execFilter} onChange={handleExecFilterChange} />
+          <ExecutiveFilter value={execFilter} onChange={setExecFilter} />
         </div>
       </div>
 
+      {loading || !summaryKpi ? <Loader message="Loading Executive Summary…" /> : <>
+      {/* ── KPI Row 1: Energy + SEC ──────────────────────────────────────── */}
       <div className="exec-kpi-grid">
-        <KpiCard title="Total Energy Consumption" value={kpiData.totalEnergy} unit="kWh" icon={Zap} accentColor="primary" trend={{ value: 3.2, label: "vs yesterday" }} />
-        <KpiCard title="Total Energy Cost" value={`₹${kpiData.energyCost.toLocaleString()}`} icon={IndianRupee} accentColor="warning" trend={{ value: 2.8, label: "vs yesterday" }} />
-        <KpiCard title="SEC (SMD)" value={secSmdValue} unit="kWh / Million Sticks" subtitle="Unit: SMD" icon={Gauge} accentColor="info" trend={{ value: -1.5, label: "improving" }} />
-        <KpiCard title="SEC (PMD)" value={secPmdValue} unit="kWh / ton" subtitle="Unit: PMD" icon={Factory} accentColor="success" trend={{ value: -0.8, label: "improving" }} />
+        <KpiCard
+          title="Total Energy Consumption"
+          value={summaryKpi.totalKWH.toLocaleString()}
+          unit="kWh"
+          icon={Zap}
+          accentColor="primary"
+          trend={{
+            value: summaryKpi.isTotalKwhUp ? summaryKpi.kwhChangePct : -summaryKpi.kwhChangePct,
+            label: "vs yesterday",
+            isPositive: !summaryKpi.isTotalKwhUp,
+          }}
+        />
+        <KpiCard
+          title="Total Energy Cost"
+          value={`₹${summaryKpi.totalCost.toLocaleString()}`}
+          icon={IndianRupee}
+          accentColor="warning"
+          trend={{
+            value: summaryKpi.isTotalCostUp ? summaryKpi.costChangePct : -summaryKpi.costChangePct,
+            label: "vs yesterday",
+            isPositive: !summaryKpi.isTotalCostUp,
+          }}
+        />
+        <KpiCard
+          title="SEC (SMD)"
+          value={secData?.smdSEC ?? "—"}
+          unit="kWh / Million Sticks"
+          subtitle="Unit: SMD"
+          icon={Gauge}
+          accentColor="info"
+          trend={secData ? {
+            value: secData.isSmdSECUp ? secData.smdSECChangePct : -secData.smdSECChangePct,
+            label: secData.isSmdSECUp ? "worsening" : "improving",
+            isPositive: !secData.isSmdSECUp,
+          } : undefined}
+        />
+        <KpiCard
+          title="SEC (PMD)"
+          value={secData?.pmdSEC ?? "—"}
+          unit="kWh / ton"
+          subtitle="Unit: PMD"
+          icon={Factory}
+          accentColor="success"
+          trend={secData ? {
+            value: secData.isPmdSECUp ? secData.pmdSECChangePct : -secData.pmdSECChangePct,
+            label: secData.isPmdSECUp ? "worsening" : "improving",
+            isPositive: !secData.isPmdSECUp,
+          } : undefined}
+        />
       </div>
 
+      {/* ── KPI Row 2: Utility + Moisture + Humidity ─────────────────────── */}
       <div className="exec-kpi-grid">
-        <KpiCard title="SEC (Utility)" value={secUtilityValue} unit="kWh" subtitle="Total Utility Energy" icon={Zap} accentColor="primary" trend={{ value: -1.2, label: "improving" }} />
+        <KpiCard
+          title="Utility Energy"
+          value={summaryKpi.utilityKWH.toLocaleString()}
+          unit="kWh"
+          subtitle="Total Utility Energy"
+          icon={Zap}
+          accentColor="primary"
+        />
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -197,7 +254,7 @@ const ExecutiveSummary = () => {
                 <div key={s.name} className="exec-moisture-row">
                   <span className="exec-moisture-name">{s.name}</span>
                   <div className="exec-moisture-bar">
-                    <div className={`exec-moisture-fill exec-moisture-fill--${status}`} style={{ width: `${pct}%` }} />
+                    <MoistureFillBar pct={pct} status={status} />
                   </div>
                   <span className={`exec-moisture-value exec-moisture-value--${status}`}>{s.value}%</span>
                 </div>
@@ -207,43 +264,62 @@ const ExecutiveSummary = () => {
           <p className="exec-drill-hint">click for Process Analysis →</p>
         </motion.div>
 
-        <KpiCard title="Avg Humidity" value={kpiData.avgHumidity} unit="% RH" icon={Wind} accentColor="humidity" />
+        <KpiCard
+          title="Avg Humidity"
+          value={summaryKpi.avgHumidity}
+          unit="% RH"
+          icon={Wind}
+          accentColor="humidity"
+        />
       </div>
 
+      {/* ── Alerts Summary ───────────────────────────────────────────────── */}
       <div className="exec-kpi-grid exec-full-row">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="kpi-card exec-kpi-card-wide">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => navigate("/alerts")}
+          className="kpi-card exec-alerts-summary-card"
+        >
           <div className="exec-card-head">
-            <span className="exec-card-label">Active Alerts</span>
+            <span className="exec-card-label">Alerts Summary</span>
             <div className="exec-card-icon-wrap exec-card-icon-wrap--warning">
-              <AlertTriangle className="exec-card-icon exec-card-icon--warning" />
-              <span className="exec-alert-badge">{alertCounts.total}</span>
+              <Bell className="exec-card-icon exec-card-icon--warning" />
+              {alertKpi.critical > 0 && <span className="exec-alert-badge">{alertKpi.critical}</span>}
             </div>
           </div>
-          <div className="exec-alert-grid">
+          <div className="exec-alert-grid exec-alert-grid--4col">
             <div className="exec-alert-tile exec-alert-tile--total">
-              <div className="exec-alert-tile-value">{alertCounts.total}</div>
+              <div className="exec-alert-tile-value">{alertKpi.total}</div>
               <div className="exec-alert-tile-label">Total</div>
             </div>
             <div className="exec-alert-tile exec-alert-tile--critical">
-              <div className="exec-alert-tile-value exec-alert-tile-value--critical">{alertCounts.critical}</div>
+              <div className="exec-alert-tile-value exec-alert-tile-value--critical">{alertKpi.critical}</div>
               <div className="exec-alert-tile-label">Critical</div>
             </div>
             <div className="exec-alert-tile exec-alert-tile--warning">
-              <div className="exec-alert-tile-value exec-alert-tile-value--warning">{alertCounts.warning}</div>
+              <div className="exec-alert-tile-value exec-alert-tile-value--warning">{alertKpi.warning}</div>
               <div className="exec-alert-tile-label">Warning</div>
             </div>
+            <div className="exec-alert-tile exec-alert-tile--acknowledged">
+              <div className="exec-alert-tile-value exec-alert-tile-value--acknowledged">{alertKpi.acknowledged}</div>
+              <div className="exec-alert-tile-label">Acknowledged</div>
+            </div>
           </div>
+          <p className="exec-drill-hint">click to manage alerts →</p>
         </motion.div>
       </div>
 
+      {/* ── Trend Chart ──────────────────────────────────────────────────── */}
       <div className="exec-kpi-grid exec-full-row">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="chart-container">
           <h3 className="exec-chart-title">{chartTitle}</h3>
-          <EnergyTrendAreaChart data={energyTrendData} />
+          <EnergyTrendAreaChart data={trendChartData} />
         </motion.div>
       </div>
 
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="chart-container">
+      {/* ── Top 5 Electricity Consumers ──────────────────────────────────── */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="chart-container">
         <div className="exec-top5-head">
           <div className="exec-top5-titlewrap">
             <Trophy />
@@ -265,31 +341,29 @@ const ExecutiveSummary = () => {
           <Top5BarChart data={sortedTop5} mode={top5Mode} />
         ) : (
           <div className="exec-top5-tablelist">
-            {sortedTop5.map((item) => {
-              const isUp = item.trendPct >= 0;
-              return (
-                <div key={item.name} className="exec-top5-row">
-                  <div className="exec-top5-row-left">
-                    <span className="exec-rank-pill">#{item.rank}</span>
-                    <div>
-                      <span className="exec-top5-row-name">{item.name}</span>
-                      <span className="exec-top5-row-line">{item.line}</span>
-                    </div>
-                  </div>
-                  <div className="exec-top5-row-right">
-                    <span className="exec-top5-row-pct">{top5Mode === "consumption" ? `${item.contribution}%` : `${item.costContribution}%`}</span>
-                    <div className="exec-trend-cell">
-                      {isUp ? <TrendingUp /> : <TrendingDown />}
-                      <span className={isUp ? "exec-up" : "exec-down"}>{item.trendPct > 0 ? "+" : ""}{item.trendPct}%</span>
-                    </div>
-                    <span className="exec-top5-row-val">{top5Mode === "cost" ? `₹${item.cost.toLocaleString()}` : `${item.consumption.toLocaleString()} kWh`}</span>
+            {sortedTop5.map((item) => (
+              <div key={item.name} className="exec-top5-row">
+                <div className="exec-top5-row-left">
+                  <span className="exec-rank-pill">#{item.rank}</span>
+                  <div>
+                    <span className="exec-top5-row-name">{item.name}</span>
+                    <span className="exec-top5-row-line">{item.line}</span>
                   </div>
                 </div>
-              );
-            })}
+                <div className="exec-top5-row-right">
+                  <span className="exec-top5-row-pct">{top5Mode === "consumption" ? `${item.contribution}%` : `${item.costContribution}%`}</span>
+                  <div className="exec-trend-cell">
+                    <TrendingDown />
+                    <span className="exec-down">—</span>
+                  </div>
+                  <span className="exec-top5-row-val">{top5Mode === "cost" ? `₹${item.cost.toLocaleString()}` : `${item.consumption.toLocaleString()} kWh`}</span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </motion.div>
+      </>}
     </DashboardLayout>
   );
 };

@@ -301,7 +301,6 @@ const ReportsPage = () => {
     </motion.div>
   );
 
-  if (loading) return <DashboardLayout><Loader message="Loading Reports…" /></DashboardLayout>;
   if (error)   return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
   return (
@@ -381,6 +380,7 @@ const ReportsPage = () => {
         </div>
       </div>
 
+      {loading ? <Loader message="Loading Reports…" /> : (
       <Tabs value={reportType} onValueChange={(v) => { setReportType(v as ReportType); setPage(1); setSearchQuery(""); }}>
         <TabsList>
           <TabsTrigger value="energy">Energy Reports</TabsTrigger>
@@ -449,6 +449,7 @@ const ReportsPage = () => {
           )}
         </TabsContent>
       </Tabs>
+      )}
     </DashboardLayout>
   );
 };
