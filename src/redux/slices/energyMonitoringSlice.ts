@@ -7,16 +7,21 @@ interface EnergyMonitoringState {
   energyTree: EnergyTreeUnit[];
   summaryMetrics: { id: string; label: string; value: number; unit: string }[];
   hourLabels: string[];
+  shiftLabels: string[];
   loading: boolean;
   error: string | null;
+  /** true once the first API call has completed (success or failure) */
+  apiLoaded: boolean;
 }
 
 const initialState: EnergyMonitoringState = {
   energyTree: [],
   summaryMetrics: [],
   hourLabels: [],
+  shiftLabels: [],
   loading: false,
   error: null,
+  apiLoaded: false,
 };
 
 export const fetchEnergyMonitoringData = createAsyncThunk(
@@ -42,12 +47,15 @@ const energyMonitoringSlice = createSlice({
       })
       .addCase(fetchEnergyMonitoringData.fulfilled, (state, action) => {
         state.loading = false;
+        state.apiLoaded = true;
         state.energyTree = action.payload.energyTree;
         state.summaryMetrics = action.payload.summaryMetrics;
         state.hourLabels = action.payload.hourLabels;
+        state.shiftLabels = action.payload.shiftLabels ?? [];
       })
       .addCase(fetchEnergyMonitoringData.rejected, (state, action) => {
         state.loading = false;
+        state.apiLoaded = true;
         state.error = action.payload as string;
       });
   },
@@ -64,3 +72,7 @@ export const selectEnergyTree = (s: { energyMonitoring: EnergyMonitoringState })
   s.energyMonitoring.energyTree;
 export const selectEnergySummaryMetrics = (s: { energyMonitoring: EnergyMonitoringState }) =>
   s.energyMonitoring.summaryMetrics;
+export const selectEnergyHourLabels = (s: { energyMonitoring: EnergyMonitoringState }) =>
+  s.energyMonitoring.hourLabels;
+export const selectEnergyShiftLabels = (s: { energyMonitoring: EnergyMonitoringState }) =>
+  s.energyMonitoring.shiftLabels;

@@ -102,12 +102,19 @@ const ProcessFilters = () => {
       : (dropdownData?.processAnalysis?.processParameter?.options ?? [])
   ) as { value: string; label: string }[];
 
-  // Machine options cascade from selected line
-  const lineToMachineMap = (dropdownData?.common?.lineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  // Machine options cascade from selected unit + line (unit-aware)
+  const unitLineToMachineMap = (dropdownData?.common?.unitLineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const lineToMachineMap     = (dropdownData?.common?.lineToMachineMapping     ?? {}) as Record<string, { value: string; label: string }[]>;
+  const resolvedMachines = (unit: string, line: string) => {
+    const key = `${unit}:${line}`;
+    return unitLineToMachineMap[key] ?? lineToMachineMap[line] ?? [];
+  };
   const machines = (
-    selections.line && lineToMachineMap[selections.line]
-      ? lineToMachineMap[selections.line]
-      : (dropdownData?.common?.machines ?? [])
+    selections.unit && selections.line
+      ? resolvedMachines(selections.unit, selections.line)
+      : selections.line && lineToMachineMap[selections.line]
+        ? lineToMachineMap[selections.line]
+        : (dropdownData?.common?.machines ?? [])
   ) as { value: string; label: string }[];
 
   // Blend options cascade from selected machine
@@ -120,7 +127,7 @@ const ProcessFilters = () => {
 
   // Helper: first machine in a line that has blends
   const firstMachineWithBlends = (lineName: string): string => {
-    const list = lineToMachineMap[lineName] ?? [];
+    const list = resolvedMachines(selections.unit, lineName);
     return (
       list.find((m) => (machineToBlendMap[m.value] ?? []).length > 0)?.value ??
       list[0]?.value ?? ""

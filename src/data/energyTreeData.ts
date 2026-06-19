@@ -4,19 +4,24 @@
 export interface EnergyTreeAsset {
   id: string;
   name: string;
-  hourly: number[]; // length 24, ordered to match HOUR_LABELS
+  hourly: number[];
+  shiftKwh?: number[];          // [shiftA_kwh, shiftB_kwh, shiftC_kwh]
 }
 
 export interface EnergyTreeLine {
   id: string;
   name: string;
   assets: EnergyTreeAsset[];
+  hourly?: number[];             // provided by API; computed from assets if absent
+  shiftKwh?: number[];
 }
 
 export interface EnergyTreeUnit {
   id: string;
   name: string;
   lines: EnergyTreeLine[];
+  hourly?: number[];             // provided by API; computed from lines if absent
+  shiftKwh?: number[];
 }
 
 // Hour labels starting at 06:00 AM through to 05:00 the next morning.

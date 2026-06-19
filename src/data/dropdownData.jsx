@@ -1,69 +1,175 @@
 // Single source of truth for all dropdown options across the application
+// Derived from the canonical JSON format below.
 
-// ─── Shared blend list (all 23 blends, reused in machineToBlendMapping) ───────
-const ALL_BLENDS = [
-  { value: "CFT",   label: "CFT" },
-  { value: "CMK",   label: "CMK" },
-  { value: "CSF",   label: "CSF" },
-  { value: "CSF64", label: "CSF64" },
-  { value: "CSV",   label: "CSV" },
-  { value: "CVF",   label: "CVF" },
-  { value: "CVG",   label: "CVG" },
-  { value: "ESO",   label: "ESO" },
-  { value: "ESP",   label: "ESP" },
-  { value: "ETR",   label: "ETR" },
-  { value: "MRD",   label: "MRD" },
-  { value: "MTR",   label: "MTR" },
-  { value: "MTU",   label: "MTU" },
-  { value: "SER",   label: "SER" },
-  { value: "SES",   label: "SES" },
-  { value: "T3",    label: "T3" },
-  { value: "TAM",   label: "TAM" },
-  { value: "TRL",   label: "TRL" },
-  { value: "TRT",   label: "TRT" },
-  { value: "TTL",   label: "TTL" },
-  { value: "TTLNB", label: "TTLNB" },
-  { value: "TTN",   label: "TTN" },
-  { value: "ZFT",   label: "ZFT" },
-];
+// ─── Raw JSON (new format) ─────────────────────────────────────────────────────
+const RAW = {
+  units: [
+    { id: 1, name: "PMD" },
+    { id: 2, name: "SMD" },
+  ],
+  lines: [
+    { id: 1, name: "Line Lamina" },
+    { id: 2, name: "Line Stem" },
+    { id: 3, name: "Line All" },
+  ],
+  machines: [
+    { id: 1,  name: "Machine All" },
+    { id: 2,  name: "DCC EXIT" },
+    { id: 3,  name: "Lamina Infeed" },
+    { id: 4,  name: "Lamina Exit" },
+    { id: 5,  name: "ADDMoist" },
+    { id: 6,  name: "CRS Infeed" },
+    { id: 7,  name: "CRS Exit" },
+    { id: 8,  name: "Flaour Cylinder EXIT" },
+    { id: 9,  name: "Product Bin" },
+  ],
+  parameters: [
+    { id: 1, name: "Moisture" },
+    { id: 2, name: "Temperature" },
+    { id: 3, name: "Humidity" },
+  ],
+  blends: [
+    { id: 1,  name: "CFT",   family: "CHARMINAR FAMILY" },
+    { id: 2,  name: "CSV",   family: "CHARMS FAMILY" },
+    { id: 3,  name: "CVF",   family: "CHARMS FAMILY" },
+    { id: 4,  name: "CMK",   family: "CHARMS FAMILY" },
+    { id: 5,  name: "CVG",   family: "CHARMS FAMILY" },
+    { id: 6,  name: "TRT",   family: "TRT/ZFT FAMILY" },
+    { id: 7,  name: "ZFT",   family: "TRT/ZFT FAMILY" },
+    { id: 8,  name: "TRL",   family: "TRT/ZFT FAMILY" },
+    { id: 9,  name: "ETR",   family: "ETR FAMILY" },
+    { id: 10, name: "CSF",   family: "CSF FAMILY" },
+    { id: 11, name: "CSF64", family: "CSF FAMILY" },
+    { id: 12, name: "SER",   family: "SES FAMILY" },
+    { id: 13, name: "MTR",   family: "SES FAMILY" },
+    { id: 14, name: "SES",   family: "SES FAMILY" },
+    { id: 15, name: "TTL",   family: "TOTAL FAMILY" },
+    { id: 16, name: "TTN",   family: "TOTAL FAMILY" },
+    { id: 17, name: "TTLNB", family: "TOTAL FAMILY" },
+    { id: 18, name: "TAM",   family: "TOTAL FAMILY" },
+    { id: 19, name: "MTU",   family: "MTU FAMILY" },
+    { id: 20, name: "MRD",   family: "MRD FAMILY" },
+    { id: 21, name: "ESP",   family: "EDITION FAMILY" },
+    { id: 22, name: "ESO",   family: "ESO FAMILY" },
+    { id: 23, name: "T3",    family: "ESO FAMILY" },
+  ],
+  // hierarchy drives all cascade/dependency logic: unit → line → machine → [parameters]
+  hierarchy: {
+    PMD: {
+      "Line Lamina": {
+        "DCC EXIT":      ["Moisture"],
+        "Lamina Infeed": ["Moisture"],
+        "Lamina Exit":   ["Moisture"],
+      },
+      "Line Stem": {
+        "ADDMoist":  ["Moisture"],
+        "CRS Infeed": ["Moisture"],
+        "CRS Exit":   ["Moisture"],
+      },
+      "Line All": {
+        "Machine All":          ["Temperature", "Humidity"],
+        "Flaour Cylinder EXIT": ["Moisture"],
+        "Product Bin":          ["Moisture"],
+      },
+    },
+    SMD: {
+      "Line All": {
+        "Machine All": ["Temperature", "Humidity"],
+      },
+    },
+  },
+};
 
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+const toOpt  = (name) => ({ value: name, label: name });
+const PARAM_META = { Moisture: "%", Temperature: "°C", Humidity: "%RH" };
+const toParamOpt = (name) => ({ value: name, label: name, unit: PARAM_META[name] ?? "" });
+
+// ─── Flat option lists (used in page-specific dropdown config below) ───────────
+const UNITS      = RAW.units.map((u) => toOpt(u.name));
+const LINES      = RAW.lines.map((l) => toOpt(l.name));
+const MACHINES   = RAW.machines.map((m) => toOpt(m.name));
+const PARAMETERS = RAW.parameters.map((p) => toParamOpt(p.name));
+const ALL_BLENDS = RAW.blends.map((b) => ({ value: b.name, label: b.name }));
+
+// ─── Cascade mappings derived from hierarchy ───────────────────────────────────
+
+// Unit → Lines
+const unitToLineMapping = Object.fromEntries(
+  Object.entries(RAW.hierarchy).map(([unit, lines]) => [
+    unit,
+    Object.keys(lines).map(toOpt),
+  ])
+);
+
+// Line → Machines (flat union across all units — used by components that only know the line)
+const lineToMachineMapping = (() => {
+  const map = {};
+  for (const lines of Object.values(RAW.hierarchy)) {
+    for (const [line, machines] of Object.entries(lines)) {
+      if (!map[line]) map[line] = [];
+      for (const machineName of Object.keys(machines)) {
+        if (!map[line].some((m) => m.value === machineName)) {
+          map[line].push(toOpt(machineName));
+        }
+      }
+    }
+  }
+  return map;
+})();
+
+// Unit + Line → Machines (hierarchy-aware; key = "UNIT:LINE")
+const unitLineToMachineMapping = (() => {
+  const map = {};
+  for (const [unit, lines] of Object.entries(RAW.hierarchy)) {
+    for (const [line, machines] of Object.entries(lines)) {
+      map[`${unit}:${line}`] = Object.keys(machines).map(toOpt);
+    }
+  }
+  return map;
+})();
+
+// Unit → Parameters (collected from all machines in that unit)
+const unitToParamMapping = (() => {
+  const map = {};
+  for (const [unit, lines] of Object.entries(RAW.hierarchy)) {
+    const seen = new Set();
+    for (const machines of Object.values(lines)) {
+      for (const params of Object.values(machines)) {
+        params.forEach((p) => seen.add(p));
+      }
+    }
+    map[unit] = [...seen].map(toParamOpt);
+  }
+  return map;
+})();
+
+// Machine → Blends (all machines carry the full blend list)
+const machineToBlendMapping = Object.fromEntries(
+  RAW.machines.map((m) => [m.name, [...ALL_BLENDS]])
+);
+
+// Asset hierarchy tree (unit → line → machine)
+const assetHierarchy = Object.entries(RAW.hierarchy).map(([unit, lines]) => ({
+  id: unit, label: unit,
+  lines: Object.entries(lines).map(([line, machines]) => ({
+    id: line, label: line,
+    machines: Object.keys(machines).map((m) => ({ id: m, label: m })),
+  })),
+}));
+
+// ─── DROPDOWN_DATA export ──────────────────────────────────────────────────────
 const DROPDOWN_DATA = {
 
   // ─────────────────────────────────────────────
   // SHARED — reused across multiple pages
   // ─────────────────────────────────────────────
   common: {
-    // Units: PMD and SMD
-    units: [
-      { value: "PMD", label: "PMD" },
-      { value: "SMD", label: "SMD" },
-    ],
-
-    // Lines
-    lines: [
-      { value: "All",         label: "All" },
-      { value: "Line All",    label: "Line All" },
-      { value: "Line Lamina", label: "Line Lamina" },
-      { value: "Line Stem",   label: "Line Stem" },
-    ],
-
-    // Machines: full machine list
-    machines: [
-      { value: "ADDMoist",             label: "ADDMoist" },
-      { value: "All",                  label: "All" },
-      { value: "CRS Dryer Exit",       label: "CRS Dryer Exit" },
-      { value: "CRS Dryer Infeed",     label: "CRS Dryer Infeed" },
-      { value: "DCC EXIT",             label: "DCC EXIT" },
-      { value: "Flaour Cylinder EXIT", label: "Flaour Cylinder EXIT" },
-      { value: "Lamina Dryer Infeed",  label: "Lamina Dryer Infeed" },
-      { value: "Lamina Dryer Outfeed", label: "Lamina Dryer Outfeed" },
-      { value: "Product Bin",          label: "Product Bin" },
-    ],
-
-    // Families = Blends (23 blend codes)
-    families: [
-      ...ALL_BLENDS,
-    ],
+    units:      UNITS,
+    lines:      LINES,
+    machines:   MACHINES,
+    families:   ALL_BLENDS,
+    parameters: PARAMETERS,
 
     shifts: [
       { value: "all",    label: "All Shifts", time: "" },
@@ -71,13 +177,6 @@ const DROPDOWN_DATA = {
       { value: "shiftB", label: "Shift B",    time: "15:30 – 23:00" },
       { value: "shiftC", label: "Shift C",    time: "23:00 – 07:00" },
       { value: "daily",  label: "Daily",      time: "07:00 – 07:00" },
-    ],
-
-    // Parameters: Humidity / Moisture / Temperature
-    parameters: [
-      { value: "Humidity",    label: "Humidity",    unit: "%RH" },
-      { value: "Moisture",    label: "Moisture",    unit: "%" },
-      { value: "Temperature", label: "Temperature", unit: "°C" },
     ],
 
     severity: [
@@ -94,111 +193,13 @@ const DROPDOWN_DATA = {
       { value: "acknowledged", label: "Acknowledged" },
     ],
 
-    // ── Dependency: Unit → Lines ─────────────────────────────────────────────
-    // PMD has 3 lines; SMD has only Line All
-    unitToLineMapping: {
-      PMD: [
-        { value: "Line All",    label: "Line All" },
-        { value: "Line Lamina", label: "Line Lamina" },
-        { value: "Line Stem",   label: "Line Stem" },
-      ],
-      SMD: [
-        { value: "Line All", label: "Line All" },
-      ],
-    },
-
-    // ── Dependency: Unit → Parameters ────────────────────────────────────────
-    // PMD supports all 3 parameters; SMD excludes Moisture
-    unitToParamMapping: {
-      PMD: [
-        { value: "Humidity",    label: "Humidity",    unit: "%RH" },
-        { value: "Moisture",    label: "Moisture",    unit: "%" },
-        { value: "Temperature", label: "Temperature", unit: "°C" },
-      ],
-      SMD: [
-        { value: "Humidity",    label: "Humidity",    unit: "%RH" },
-        { value: "Temperature", label: "Temperature", unit: "°C" },
-      ],
-    },
-
-    // ── Dependency: Line → Machines ──────────────────────────────────────────
-    lineToMachineMapping: {
-      "Line All": [
-        { value: "All",                  label: "All" },
-        { value: "Flaour Cylinder EXIT", label: "Flaour Cylinder EXIT" },
-        { value: "Product Bin",          label: "Product Bin" },
-      ],
-      "Line Lamina": [
-        { value: "DCC EXIT",             label: "DCC EXIT" },
-        { value: "Lamina Dryer Infeed",  label: "Lamina Dryer Infeed" },
-        { value: "Lamina Dryer Outfeed", label: "Lamina Dryer Outfeed" },
-      ],
-      "Line Stem": [
-        { value: "ADDMoist",         label: "ADDMoist" },
-        { value: "CRS Dryer Exit",   label: "CRS Dryer Exit" },
-        { value: "CRS Dryer Infeed", label: "CRS Dryer Infeed" },
-      ],
-    },
-
-    // ── Dependency: Machine → Blends (Families) ──────────────────────────────
-    // "All" machine has no blend options; every other machine carries all 23 blends
-    machineToBlendMapping: {
-      "All":                  [...ALL_BLENDS],
-      "ADDMoist":             [...ALL_BLENDS],
-      "CRS Dryer Exit":       [...ALL_BLENDS],
-      "CRS Dryer Infeed":     [...ALL_BLENDS],
-      "DCC EXIT":             [...ALL_BLENDS],
-      "Flaour Cylinder EXIT": [...ALL_BLENDS],
-      "Lamina Dryer Infeed":  [...ALL_BLENDS],
-      "Lamina Dryer Outfeed": [...ALL_BLENDS],
-      "Product Bin":          [...ALL_BLENDS],
-    },
-
-    // ── Asset hierarchy (unit → line → machine tree) ─────────────────────────
-    assetHierarchy: [
-      {
-        id: "PMD", label: "PMD",
-        lines: [
-          {
-            id: "Line All", label: "Line All",
-            machines: [
-              { id: "All",                  label: "All" },
-              { id: "Flaour Cylinder EXIT", label: "Flaour Cylinder EXIT" },
-              { id: "Product Bin",          label: "Product Bin" },
-            ],
-          },
-          {
-            id: "Line Lamina", label: "Line Lamina",
-            machines: [
-              { id: "DCC EXIT",             label: "DCC EXIT" },
-              { id: "Lamina Dryer Infeed",  label: "Lamina Dryer Infeed" },
-              { id: "Lamina Dryer Outfeed", label: "Lamina Dryer Outfeed" },
-            ],
-          },
-          {
-            id: "Line Stem", label: "Line Stem",
-            machines: [
-              { id: "ADDMoist",         label: "ADDMoist" },
-              { id: "CRS Dryer Exit",   label: "CRS Dryer Exit" },
-              { id: "CRS Dryer Infeed", label: "CRS Dryer Infeed" },
-            ],
-          },
-        ],
-      },
-      {
-        id: "SMD", label: "SMD",
-        lines: [
-          {
-            id: "Line All", label: "Line All",
-            machines: [
-              { id: "All",                  label: "All" },
-              { id: "Flaour Cylinder EXIT", label: "Flaour Cylinder EXIT" },
-              { id: "Product Bin",          label: "Product Bin" },
-            ],
-          },
-        ],
-      },
-    ],
+    // ── Cascade dependency mappings ────────────────────────────────────────────
+    unitToLineMapping,
+    lineToMachineMapping,
+    unitLineToMachineMapping,   // hierarchy-aware: key = "UNIT:LINE"
+    unitToParamMapping,
+    machineToBlendMapping,
+    assetHierarchy,
   },
 
   // ─────────────────────────────────────────────
@@ -255,51 +256,50 @@ const DROPDOWN_DATA = {
   // ─────────────────────────────────────────────
   // 3. PROCESS ANALYSIS
   // ─────────────────────────────────────────────
-  processAnalysis: {
-    unit:    { id: "unit",    label: "Unit Name",    default: "all",        options: "→ common.units" },
-    line:    { id: "line",    label: "Line Name",    default: "all",        options: "→ common.lines" },
-    machine: { id: "machine", label: "Machine Name", default: "all",        options: "→ common.machines" },
-    processParameter: {
-      id: "process-parameter", label: "Parameter Name", default: "Moisture",
-      options: [
-        { value: "Moisture",    label: "Moisture" },
-        { value: "Humidity",    label: "Humidity" },
-        { value: "Temperature", label: "Temperature" },
-      ],
-    },
-    // Blend options depend on selected Machine — see common.machineToBlendMapping
-    blendRunning: {
-      id: "blend-running", label: "Blend (Running)", default: "CFT",
-      note: "Subset of machineToBlendMapping[selectedMachine] that are currently running",
-      options: [
-        { value: "CFT", label: "CFT" },
-        { value: "CMK", label: "CMK" },
-        { value: "CSF", label: "CSF" },
-      ],
-    },
-    blend: {
-      id: "blend", label: "Blend", default: "CFT",
-      note: "Options derived from common.machineToBlendMapping[selectedMachine]",
-      options: "→ common.machineToBlendMapping[selectedMachine]",
-    },
-    period: {
-      id: "period", label: "Period", default: "today",
-      options: [
-        { value: "today",     label: "Today" },
-        { value: "yesterday", label: "Yesterday" },
-        { value: "last7",     label: "Last 7 Days" },
-        { value: "last30",    label: "Last 30 Days" },
-        { value: "thisMonth", label: "This Month" },
-      ],
-    },
-    blendRun: {
-      id: "blend-run", label: "Blend Run", default: "allRuns",
-      note: "Run timestamps generated dynamically based on selected blend + period",
-      options: [
-        { value: "allRuns", label: "All runs in period" },
-      ],
-    },
-  },
+  // processAnalysis: {
+  //   unit:    { id: "unit",    label: "Unit Name",    default: "all", options: "→ common.units" },
+  //   line:    { id: "line",    label: "Line Name",    default: "all", options: "→ common.lines" },
+  //   machine: { id: "machine", label: "Machine Name", default: "all", options: "→ common.machines" },
+  //   processParameter: {
+  //     id: "process-parameter", label: "Parameter Name", default: "Moisture",
+  //     options: [
+  //       { value: "Moisture",    label: "Moisture" },
+  //       { value: "Humidity",    label: "Humidity" },
+  //       { value: "Temperature", label: "Temperature" },
+  //     ],
+  //   },
+  //   blendRunning: {
+  //     id: "blend-running", label: "Blend (Running)", default: "CFT",
+  //     note: "Subset of machineToBlendMapping[selectedMachine] that are currently running",
+  //     options: [
+  //       { value: "CFT", label: "CFT" },
+  //       { value: "CMK", label: "CMK" },
+  //       { value: "CSF", label: "CSF" },
+  //     ],
+  //   },
+  //   blend: {
+  //     id: "blend", label: "Blend", default: "CFT",
+  //     note: "Options derived from common.machineToBlendMapping[selectedMachine]",
+  //     options: "→ common.machineToBlendMapping[selectedMachine]",
+  //   },
+  //   period: {
+  //     id: "period", label: "Period", default: "today",
+  //     options: [
+  //       { value: "today",     label: "Today" },
+  //       { value: "yesterday", label: "Yesterday" },
+  //       { value: "last7",     label: "Last 7 Days" },
+  //       { value: "last30",    label: "Last 30 Days" },
+  //       { value: "thisMonth", label: "This Month" },
+  //     ],
+  //   },
+  //   blendRun: {
+  //     id: "blend-run", label: "Blend Run", default: "allRuns",
+  //     note: "Run timestamps generated dynamically based on selected blend + period",
+  //     options: [
+  //       { value: "allRuns", label: "All runs in period" },
+  //     ],
+  //   },
+  // },
 
   // ─────────────────────────────────────────────
   // 4. ALERTS

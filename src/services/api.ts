@@ -6,7 +6,8 @@ import {
   alertsData,
   processData,
 } from "@/data/mockData";
-import { energyTree } from "@/data/energyTreeData";
+import { energyTree as energyTreeMock } from "@/data/energyTreeData";
+import type { EnergyTreeUnit, EnergyTreeLine, EnergyTreeAsset } from "@/data/energyTreeData";
 import DROPDOWN_DATA from "../data/dropdownData";
 import PAGE_DATA from "@/data/pageData";
 import {
@@ -14,7 +15,7 @@ import {
   EXEC_ENDPOINTS,
   buildExecParams,
 } from "@/data/executiveApiConfig";
-import type { ApiPayload, ExecApiPayload } from "@/redux/slices/dropdownSlice";
+import type { ApiPayload, ExecApiPayload, EnergyApiPayload } from "@/redux/slices/dropdownSlice";
 
 // ─── General backend client ───────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -54,13 +55,158 @@ const execClient = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// ─── Dropdown transform ───────────────────────────────────────────────────────
+// Converts raw API response { units, lines, machines, parameters, blends, hierarchy }
+// into the DROPDOWN_DATA.common shape that all components consume.
+const PARAM_UNIT: Record<string, string> = { Moisture: "%", Temperature: "°C", Humidity: "%RH" };
+const toOpt      = (name: string) => ({ value: name, label: name });
+const toParamOpt = (name: string) => ({ value: name, label: name, unit: PARAM_UNIT[name] ?? "" });
+
+function buildDropdownCommon(raw: any) {
+  const units      = raw.units.map((u: any) => toOpt(u.name));
+  const lines      = raw.lines.map((l: any) => toOpt(l.name));
+  const machines   = raw.machines.map((m: any) => toOpt(m.name));
+  const parameters = raw.parameters.map((p: any) => toParamOpt(p.name));
+  const families   = raw.blends.map((b: any) => ({ value: b.name, label: b.name }));
+  const hier       = raw.hierarchy as Record<string, Record<string, Record<string, string[]>>>;
+
+  // Unit → Lines
+  const unitToLineMapping: Record<string, any[]> = {};
+  for (const [unit, linesObj] of Object.entries(hier)) {
+    unitToLineMapping[unit] = Object.keys(linesObj).map(toOpt);
+  }
+
+  // Line → Machines (flat union — used when unit is unknown)
+  const lineToMachineMapping: Record<string, any[]> = {};
+  for (const linesObj of Object.values(hier)) {
+    for (const [line, machinesObj] of Object.entries(linesObj)) {
+      if (!lineToMachineMapping[line]) lineToMachineMapping[line] = [];
+      for (const machineName of Object.keys(machinesObj)) {
+        if (!lineToMachineMapping[line].some((m) => m.value === machineName)) {
+          lineToMachineMapping[line].push(toOpt(machineName));
+        }
+      }
+    }
+  }
+
+  // "UNIT:LINE" → Machines (hierarchy-aware; used when unit is known)
+  const unitLineToMachineMapping: Record<string, any[]> = {};
+  for (const [unit, linesObj] of Object.entries(hier)) {
+    for (const [line, machinesObj] of Object.entries(linesObj)) {
+      unitLineToMachineMapping[`${unit}:${line}`] = Object.keys(machinesObj).map(toOpt);
+    }
+  }
+
+  // Unit → Parameters (collected from all machines in that unit)
+  const unitToParamMapping: Record<string, any[]> = {};
+  for (const [unit, linesObj] of Object.entries(hier)) {
+    const seen = new Set<string>();
+    for (const machinesObj of Object.values(linesObj)) {
+      for (const params of Object.values(machinesObj)) {
+        params.forEach((p) => seen.add(p));
+      }
+    }
+    unitToParamMapping[unit] = [...seen].map(toParamOpt);
+  }
+
+  // Machine → Blends (all machines carry the full blend list)
+  const machineToBlendMapping: Record<string, any[]> = {};
+  for (const m of raw.machines) {
+    machineToBlendMapping[m.name] = [...families];
+  }
+
+  // Asset hierarchy tree
+  const assetHierarchy = Object.entries(hier).map(([unit, linesObj]) => ({
+    id: unit, label: unit,
+    lines: Object.entries(linesObj).map(([line, machinesObj]) => ({
+      id: line, label: line,
+      machines: Object.keys(machinesObj).map((m) => ({ id: m, label: m })),
+    })),
+  }));
+
+  return {
+    units, lines, machines, parameters, families,
+    unitToLineMapping,
+    lineToMachineMapping,
+    unitLineToMachineMapping,
+    unitToParamMapping,
+    machineToBlendMapping,
+    assetHierarchy,
+    shifts:      DROPDOWN_DATA.common.shifts,
+    severity:    DROPDOWN_DATA.common.severity,
+    alertStatus: DROPDOWN_DATA.common.alertStatus,
+  };
+}
+
+// ─── Energy Monitoring response transform ─────────────────────────────────────
+// API shape: { granularity, slotLabels, zones: [{ name, slotKwh, shiftKwh, children }] }
+// zones → EnergyTreeUnit, zone.children (PCCs) → EnergyTreeLine, pcc.children → EnergyTreeAsset
+function transformEnergyResponse(raw: any): {
+  tree: EnergyTreeUnit[];
+  slotLabels: string[];
+  shiftLabels: string[];
+} {
+  const slotLabels: string[] = raw?.slotLabels ?? [];
+  const zones: any[] = raw?.zones ?? [];
+
+  if (!zones.length) {
+    console.warn("[Energy Monitoring] No zones in response:", raw);
+    return { tree: [], slotLabels, shiftLabels: [] };
+  }
+
+  const shiftLabels: string[] = (zones[0]?.shiftKwh ?? []).map(
+    (s: any) => s.label ?? `Shift ${s.shift}`
+  );
+
+  const tree: EnergyTreeUnit[] = zones.map((zone: any) => {
+    const children: any[] = zone.children ?? [];
+
+    const lines: EnergyTreeLine[] = children.map((child: any) => {
+      const subChildren: any[] = child.children ?? [];
+
+      const assets: EnergyTreeAsset[] = subChildren.map((sf: any) => ({
+        id:       `${zone.name}__${child.name}__${sf.name}`,
+        name:     sf.name,
+        hourly:   sf.slotKwh ?? [],
+        shiftKwh: (sf.shiftKwh ?? []).map((s: any) => s.kwh as number),
+      }));
+
+      return {
+        id:       `${zone.name}__${child.name}`,
+        name:     child.name,
+        assets,
+        hourly:   child.slotKwh ?? [],
+        shiftKwh: (child.shiftKwh ?? []).map((s: any) => s.kwh as number),
+      };
+    });
+
+    return {
+      id:       zone.name,
+      name:     zone.name,
+      lines,
+      hourly:   zone.slotKwh ?? [],
+      shiftKwh: (zone.shiftKwh ?? []).map((s: any) => s.kwh as number),
+    };
+  });
+
+  return { tree, slotLabels, shiftLabels };
+}
+
 // ─── Centralised API Service ──────────────────────────────────────────────────
 
 export const apiService = {
 
   // ── Dropdown / Master data ───────────────────────────────────────────────
   async fetchDropdownData() {
-    return DROPDOWN_DATA;
+    console.log("[Dropdowns] GET /dropdowns/all");
+    try {
+      const res = await execClient.get("/dropdowns/all");
+      console.log("[Dropdowns] Response →", res.data);
+      return { ...DROPDOWN_DATA, common: buildDropdownCommon(res.data) };
+    } catch (err) {
+      console.warn("[Dropdowns] API unavailable, falling back to static data", err);
+      return DROPDOWN_DATA;
+    }
   },
 
   // ── Executive Summary — individual endpoint methods ──────────────────────
@@ -126,10 +272,35 @@ export const apiService = {
   },
 
   // ── Energy Monitoring ────────────────────────────────────────────────────
-  async fetchEnergyMonitoringData(payload?: ApiPayload) {
-    console.log("[Energy Monitoring] API Payload:", payload);
-    const { summaryMetrics, hourLabels } = PAGE_DATA.energyMonitoring;
-    return { energyTree, summaryMetrics, hourLabels };
+  async fetchEnergyMonitoringData(payload?: EnergyApiPayload) {
+    const period     = payload?.period ?? "today";
+    const isIntraday = period === "today" || period === "yesterday";
+
+    // shift_detail: 1=ShiftA, 2=ShiftB, 3=ShiftC, 4=all+summary, 5=daily(week)
+    const SHIFT_NUM: Record<string, number> = { shiftA: 1, shiftB: 2, shiftC: 3 };
+    const shift_detail = isIntraday
+      ? (SHIFT_NUM[payload?.shift ?? ""] ?? 4)
+      : 5;
+
+    const params = {
+      period:      isIntraday ? "day" : "week",
+      start_date:  payload?.dateRange.from,
+      end_date:    payload?.dateRange.to,
+      shift_detail,
+    };
+
+    console.log("[Energy Monitoring] GET /energy-monitoring params →", params);
+    try {
+      const res = await execClient.get("/energy-monitoring", { params });
+      console.log("[Energy Monitoring] Response →", res.data);
+      const { tree, slotLabels, shiftLabels } = transformEnergyResponse(res.data);
+      const { summaryMetrics } = PAGE_DATA.energyMonitoring;
+      return { energyTree: tree, summaryMetrics, hourLabels: slotLabels, shiftLabels };
+    } catch (err) {
+      console.warn("[Energy Monitoring] API unavailable, falling back to mock data", err);
+      const { summaryMetrics, hourLabels } = PAGE_DATA.energyMonitoring;
+      return { energyTree: energyTreeMock, summaryMetrics, hourLabels, shiftLabels: [] };
+    }
   },
 
   // ── Process Analysis ─────────────────────────────────────────────────────

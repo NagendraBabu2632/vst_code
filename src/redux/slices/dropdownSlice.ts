@@ -43,6 +43,8 @@ export interface ExecApiPayload {
 export interface EnergyApiPayload {
   shift: string;
   dateRange: { from: string; to: string };
+  /** Page-level period: "today" | "yesterday" | "7days" | "30days" | "month" */
+  period: string;
 }
 
 export interface ProcessApiPayload {
@@ -108,9 +110,10 @@ export const buildApiPayload = (selections: DropdownSelections): ApiPayload => (
   processParameter: selections.processParameter,
 });
 
-/** Energy Monitoring: only shift + dateRange */
+/** Energy Monitoring: shift + dateRange + period */
 export const buildEnergyPayload = (s: DropdownSelections): EnergyApiPayload => ({
   shift: s.shift,
+  period: s.period,
   dateRange:
     s.period === "custom"
       ? { from: s.dateRangeFrom, to: s.dateRangeTo }

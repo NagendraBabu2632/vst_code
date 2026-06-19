@@ -116,8 +116,6 @@ export const Top5BarChart = ({ data, mode }: Top5BarChartProps) => {
             return (
               <g key={`yt-${d.name}`} transform={`translate(0,${by})`}>
                 <text x={-8} dy={4} textAnchor="end" fill={axisStroke} fontSize={11}>{d.name}</text>
-                <circle cx={-120} cy={0} r={9} fill="hsl(35, 92%, 50%)" fillOpacity={0.2} stroke="hsl(35, 92%, 50%)" />
-                <text x={-120} y={4} textAnchor="middle" fill="hsl(35, 92%, 50%)" fontSize={9} fontWeight="bold">#{d.rank}</text>
               </g>
             );
           })}

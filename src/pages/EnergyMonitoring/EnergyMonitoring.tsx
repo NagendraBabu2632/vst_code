@@ -16,7 +16,6 @@ import {
   setDropdownSelection,
   resetPageSelections,
   selectDropdownSelections,
-  selectDropdownData,
   buildEnergyPayload,
 } from "@/redux/slices/dropdownSlice";
 
@@ -35,21 +34,17 @@ const EnergyMonitoring = () => {
   const loading = useAppSelector(selectEnergyLoading);
   const error = useAppSelector(selectEnergyError);
   const selections = useAppSelector(selectDropdownSelections);
-  const dropdownData = useAppSelector(selectDropdownData);
-
-  const shiftOptions = (dropdownData?.common?.shifts ?? []) as { value: string; label: string }[];
   const period = (selections.period as PeriodOption) ?? "today";
-  const shift = selections.shift;
 
   // Reset this page's dropdowns to defaults on every mount
   useEffect(() => {
-    dispatch(resetPageSelections({ period: "today", shift: "all" }));
+    dispatch(resetPageSelections({ period: "today" }));
   }, [dispatch]);
 
   useEffect(() => {
     dispatch(fetchEnergyMonitoringData(buildEnergyPayload(selections)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, selections.unit, selections.line, selections.machine, selections.shift, selections.period]);
+  }, [dispatch, selections.period]);
 
   if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
@@ -68,19 +63,6 @@ const EnergyMonitoring = () => {
                 value: k,
                 label: periodLabels[k],
               }))}
-            />
-          </div>
-          <div className="energy-field">
-            <label className="energy-field-label">Shift</label>
-            <Dropdown
-              value={shift}
-              onValueChange={(v) => dispatch(setDropdownSelection({ key: "shift", value: v }))}
-              triggerClassName="w-[140px]"
-              options={
-                shiftOptions.length
-                  ? shiftOptions.map((s) => ({ value: s.value, label: s.label }))
-                  : ["All Shifts", "Shift A", "Shift B", "Shift C"]
-              }
             />
           </div>
         </div>

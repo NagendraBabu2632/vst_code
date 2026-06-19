@@ -281,17 +281,18 @@ const ProcessAnalysis = () => {
   // On mount: set default selections from loaded dropdown data, then fire the initial fetch.
   // After this, the API is only called when the user clicks Apply.
   useEffect(() => {
-    const unitList          = (dropdownData?.common?.units                ?? []) as { value: string; label: string }[];
-    const unitToLineMap     = (dropdownData?.common?.unitToLineMapping     ?? {}) as Record<string, { value: string; label: string }[]>;
-    const lineToMachMap     = (dropdownData?.common?.lineToMachineMapping  ?? {}) as Record<string, { value: string; label: string }[]>;
-    const machineToBlendMap = (dropdownData?.common?.machineToBlendMapping ?? {}) as Record<string, { value: string; label: string }[]>;
-    const unitToParamMap    = (dropdownData?.common?.unitToParamMapping    ?? {}) as Record<string, { value: string; label: string }[]>;
+    const unitList             = (dropdownData?.common?.units                    ?? []) as { value: string; label: string }[];
+    const unitToLineMap        = (dropdownData?.common?.unitToLineMapping         ?? {}) as Record<string, { value: string; label: string }[]>;
+    const unitLineToMachineMap = (dropdownData?.common?.unitLineToMachineMapping  ?? {}) as Record<string, { value: string; label: string }[]>;
+    const lineToMachMap        = (dropdownData?.common?.lineToMachineMapping      ?? {}) as Record<string, { value: string; label: string }[]>;
+    const machineToBlendMap    = (dropdownData?.common?.machineToBlendMapping     ?? {}) as Record<string, { value: string; label: string }[]>;
+    const unitToParamMap       = (dropdownData?.common?.unitToParamMapping        ?? {}) as Record<string, { value: string; label: string }[]>;
 
     const firstUnit = unitList[0]?.value ?? "PMD";
     const firstLine = unitToLineMap[firstUnit]?.[0]?.value ?? "";
 
-    // Pick the first machine in the line that has blends
-    const machinesInLine = lineToMachMap[firstLine] ?? [];
+    // Pick the first machine in the line that has blends (unit-aware lookup)
+    const machinesInLine = unitLineToMachineMap[`${firstUnit}:${firstLine}`] ?? lineToMachMap[firstLine] ?? [];
     const firstMachine = (
       machinesInLine.find((m) => (machineToBlendMap[m.value] ?? []).length > 0) ??
       machinesInLine[0]

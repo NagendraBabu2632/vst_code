@@ -89,12 +89,15 @@ const ReportsPage = () => {
       : (dropdownData?.common?.lines ?? [])
   ) as { value: string; label: string }[];
 
-  // Machine options cascade from selected line
-  const lineToMachineMap = (dropdownData?.common?.lineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  // Machine options cascade from selected unit + line (unit-aware)
+  const unitLineToMachineMap = (dropdownData?.common?.unitLineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const lineToMachineMap     = (dropdownData?.common?.lineToMachineMapping     ?? {}) as Record<string, { value: string; label: string }[]>;
   const machineOpts = (
-    selections.line && lineToMachineMap[selections.line]
-      ? lineToMachineMap[selections.line]
-      : (dropdownData?.common?.machines ?? [])
+    selections.unit && selections.line && unitLineToMachineMap[`${selections.unit}:${selections.line}`]
+      ? unitLineToMachineMap[`${selections.unit}:${selections.line}`]
+      : selections.line && lineToMachineMap[selections.line]
+        ? lineToMachineMap[selections.line]
+        : (dropdownData?.common?.machines ?? [])
   ) as { value: string; label: string }[];
 
   const set = (key: Parameters<typeof setDropdownSelection>[0]["key"]) =>

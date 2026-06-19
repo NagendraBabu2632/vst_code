@@ -3,16 +3,18 @@ import { BarChart2, ChevronRight, LineChart, TrendingUp, X } from "lucide-react"
 import * as d3 from "d3";
 import { useChartSize } from "@/components/charts/useChartSize";
 import "@/components/charts/tooltip.css";
-import { HOUR_LABELS, energyTree, sumHourly, type EnergyTreeAsset, type EnergyTreeLine, type EnergyTreeUnit } from "@/data/energyTreeData";
+import { HOUR_LABELS, energyTree as energyTreeStatic, sumHourly, type EnergyTreeAsset, type EnergyTreeLine, type EnergyTreeUnit } from "@/data/energyTreeData";
+import { useAppSelector } from "@/redux/hooks/reduxHooks";
+import { selectEnergyTree, selectEnergyHourLabels, selectEnergyShiftLabels } from "@/redux/slices/energyMonitoringSlice";
 import "./EnergyTreeTable.css";
 
 export type EnergyPeriod = "today" | "yesterday" | "7days" | "30days" | "month";
 type ViewMode = "hour" | "shift" | "day";
 
 type Row =
-  | { kind: "unit"; depth: 0; id: string; name: string; hourly: number[]; total: number; childCount: number; childLabel: string; expandable: true }
-  | { kind: "line"; depth: 1; id: string; name: string; hourly: number[]; total: number; childCount: number; childLabel: string; expandable: true; parentId: string }
-  | { kind: "asset"; depth: 2; id: string; name: string; hourly: number[]; total: number; expandable: false; parentId: string };
+  | { kind: "unit";  depth: 0; id: string; name: string; hourly: number[]; shiftKwh?: number[]; total: number; childCount: number; childLabel: string; expandable: true }
+  | { kind: "line";  depth: 1; id: string; name: string; hourly: number[]; shiftKwh?: number[]; total: number; childCount: number; childLabel: string; expandable: true; parentId: string }
+  | { kind: "asset"; depth: 2; id: string; name: string; hourly: number[]; shiftKwh?: number[]; total: number; expandable: false; parentId: string };
 
 interface PreparedLine extends EnergyTreeLine { hourly: number[]; total: number }
 interface PreparedUnit extends EnergyTreeUnit { hourly: number[]; total: number; preparedLines: PreparedLine[] }
@@ -24,10 +26,10 @@ const sumRange = (a: number[], start: number, end: number) =>
 function prepare(tree: EnergyTreeUnit[]): PreparedUnit[] {
   return tree.map((unit) => {
     const preparedLines: PreparedLine[] = unit.lines.map((line) => {
-      const h = sumHourly(line.assets);
+      const h = line.hourly?.length ? line.hourly : sumHourly(line.assets);
       return { ...line, hourly: h, total: sumArr(h) };
     });
-    const h = sumHourly(preparedLines);
+    const h = unit.hourly?.length ? unit.hourly : sumHourly(preparedLines);
     return { ...unit, preparedLines, hourly: h, total: sumArr(h) };
   });
 }
@@ -81,7 +83,7 @@ function toDayValues(id: string, hourly: number[], n: number): number[] {
 }
 
 // Inline trend chart shown when an asset is selected — D3-powered, responsive
-const AssetTrendChart = ({ asset, onClose }: { asset: EnergyTreeAsset; onClose: () => void }) => {
+const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsset; slotLabels: string[]; onClose: () => void }) => {
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const tooltipRef = useRef<HTMLDivElement>(null);
   const { ref: chartWrapRef, width } = useChartSize<HTMLDivElement>(760);
@@ -213,7 +215,7 @@ const AssetTrendChart = ({ asset, onClose }: { asset: EnergyTreeAsset; onClose: 
                     r={3}
                     fill="var(--primary)"
                     className="energy-trend-data-point"
-                    onMouseMove={(e) => showTip(e, HOUR_LABELS[i], v)}
+                    onMouseMove={(e) => showTip(e, (slotLabels[i] ?? HOUR_LABELS[i] ?? String(i)), v)}
                     onMouseLeave={hideTip}
                   />
                 ))}
@@ -237,7 +239,7 @@ const AssetTrendChart = ({ asset, onClose }: { asset: EnergyTreeAsset; onClose: 
                 onMouseEnter={(e) => {
                   (e.currentTarget as SVGRectElement).setAttribute("fill-opacity", "1");
                   (e.currentTarget as SVGRectElement).setAttribute("stroke-opacity", "1");
-                  showTip(e, HOUR_LABELS[i], v);
+                  showTip(e, (slotLabels[i] ?? HOUR_LABELS[i] ?? String(i)), v);
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as SVGRectElement).setAttribute("fill-opacity", "0.22");
@@ -250,8 +252,8 @@ const AssetTrendChart = ({ asset, onClose }: { asset: EnergyTreeAsset; onClose: 
             {/* X baseline */}
             <line x1={0} x2={innerW} y1={innerH} y2={innerH} stroke="var(--border)" />
 
-            {/* X-axis labels — every 3rd hour */}
-            {HOUR_LABELS.map((label, i) => {
+            {/* X-axis labels — every 3rd slot */}
+            {slotLabels.map((label, i) => {
               if (i % 3 !== 0) return null;
               const x = chartType === "line"
                 ? (xLine(i) ?? 0)
@@ -275,7 +277,12 @@ interface EnergyTreeTableProps {
 }
 
 const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
-  const data = useMemo(() => prepare(energyTree), []);
+  // Use live API data from Redux; fall back to static mock if store is empty
+  const liveTree = useAppSelector(selectEnergyTree);
+  const apiSlotLabels  = useAppSelector(selectEnergyHourLabels);
+  const apiShiftLabels = useAppSelector(selectEnergyShiftLabels);
+  const treeSource = liveTree.length ? liveTree : energyTreeStatic;
+  const data = useMemo(() => prepare(treeSource), [treeSource]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const isIntraday = period === "today" || period === "yesterday";
@@ -283,26 +290,34 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
 
   const viewMode: ViewMode = isIntraday ? intradayMode : "day";
 
-  const columns = useMemo(() => {
-    if (viewMode === "hour") return HOUR_LABELS;
-    if (viewMode === "shift") return SHIFT_LABELS;
-    return dayLabels(dayCountFor(period));
-  }, [viewMode, period]);
+  const slotLabels = apiSlotLabels.length ? apiSlotLabels : HOUR_LABELS;
+  const shiftLabels = apiShiftLabels.length ? apiShiftLabels : SHIFT_LABELS;
 
-  const valuesFor = (id: string, hourly: number[]): number[] => {
+  const columns = useMemo(() => {
+    if (viewMode === "hour") return slotLabels;
+    if (viewMode === "shift") return shiftLabels;
+    return dayLabels(dayCountFor(period));
+  }, [viewMode, period, slotLabels, shiftLabels]);
+
+  const valuesFor = (id: string, hourly: number[], shiftKwh?: number[]): number[] => {
     if (viewMode === "hour") return hourly;
-    if (viewMode === "shift") return toShiftValues(hourly);
+    if (viewMode === "shift") {
+      if (shiftKwh?.length) return shiftKwh;
+      return toShiftValues(hourly);
+    }
+    // For multiday view: if the API returned daily values (not 24-hour), use them directly
+    if (hourly.length !== 24) return hourly.slice(0, columns.length);
     return toDayValues(id, hourly, columns.length);
   };
 
   const selectedAsset = useMemo(() => {
     if (!selectedAssetId) return null;
-    for (const u of energyTree) for (const l of u.lines) {
+    for (const u of treeSource) for (const l of u.lines) {
       const a = l.assets.find((x) => x.id === selectedAssetId);
       if (a) return a;
     }
     return null;
-  }, [selectedAssetId]);
+  }, [selectedAssetId, treeSource]);
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -317,7 +332,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
       const lineCount = unit.preparedLines.length;
       out.push({
         kind: "unit", depth: 0, id: unit.id, name: unit.name,
-        hourly: unit.hourly, total: unit.total,
+        hourly: unit.hourly, shiftKwh: unit.shiftKwh, total: unit.total,
         childCount: lineCount, childLabel: `${lineCount} ${lineCount === 1 ? "Line" : "Lines"}`,
         expandable: true,
       });
@@ -326,7 +341,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
         const assetCount = line.assets.length;
         out.push({
           kind: "line", depth: 1, id: line.id, name: line.name,
-          hourly: line.hourly, total: line.total,
+          hourly: line.hourly, shiftKwh: line.shiftKwh, total: line.total,
           childCount: assetCount, childLabel: `${assetCount} ${assetCount === 1 ? "Asset" : "Assets"}`,
           expandable: true, parentId: unit.id,
         });
@@ -334,7 +349,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
         for (const asset of line.assets as EnergyTreeAsset[]) {
           out.push({
             kind: "asset", depth: 2, id: asset.id, name: asset.name,
-            hourly: asset.hourly, total: sumArr(asset.hourly),
+            hourly: asset.hourly, shiftKwh: asset.shiftKwh, total: sumArr(asset.hourly),
             expandable: false, parentId: line.id,
           });
         }
@@ -347,7 +362,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
   const rowsWithCols = useMemo(
     () =>
       rows.map((r) => {
-        const cols = valuesFor(r.id, r.hourly);
+        const cols = valuesFor(r.id, r.hourly, r.shiftKwh);
         return { row: r, cols, total: sumArr(cols) };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -450,7 +465,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
         </div>
       </div>
       {selectedAsset && (
-        <AssetTrendChart asset={selectedAsset} onClose={() => setSelectedAssetId(null)} />
+        <AssetTrendChart asset={selectedAsset} slotLabels={slotLabels} onClose={() => setSelectedAssetId(null)} />
       )}
     </>
   );
