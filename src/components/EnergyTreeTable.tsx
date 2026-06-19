@@ -398,7 +398,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
           <button
             type="button"
             role="tab"
-            aria-selected={intradayMode === "hour"}
+            aria-selected={intradayMode === "hour" ? "true" : "false"}
             className={`energy-view-toggle-btn${intradayMode === "hour" ? " is-active" : ""}`}
             onClick={() => setIntradayMode("hour")}
           >
@@ -407,7 +407,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
           <button
             type="button"
             role="tab"
-            aria-selected={intradayMode === "shift"}
+            aria-selected={intradayMode === "shift" ? "true" : "false"}
             className={`energy-view-toggle-btn${intradayMode === "shift" ? " is-active" : ""}`}
             onClick={() => setIntradayMode("shift")}
           >
