@@ -567,3 +567,47 @@
 .page-title{
   margin-bottom: 0.5rem;
 }
+
+/* Production upload — date row */
+.settings-prod-date-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 220px;
+}
+.settings-prod-date-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* Production upload — result summary inside the upload card */
+.settings-prod-upload-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin-top: 0.25rem;
+  text-align: center;
+}
+.settings-prod-upload-error {
+  color: var(--destructive);
+}
+
+/* Blend configuration — hidden file input */
+.settings-file-hidden {
+  display: none;
+}
+
+/* Blend add row: name | family | description | button — single horizontal line */
+.settings-blend-add-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  align-items: end;
+}
+@media (min-width: 768px) {
+  .settings-blend-add-grid {
+    grid-template-columns: 1fr 1fr 2fr auto;
+  }
+}

@@ -8,7 +8,7 @@ import {
 } from "@/data/mockData";
 import { energyTree as energyTreeMock } from "@/data/energyTreeData";
 import type { EnergyTreeUnit, EnergyTreeLine, EnergyTreeAsset } from "@/data/energyTreeData";
-import DROPDOWN_DATA from "../data/dropdownData";
+// import DROPDOWN_DATA from "../data/dropdownData";
 import PAGE_DATA from "@/data/pageData";
 import {
   EXEC_MOCK,
@@ -347,6 +347,80 @@ export const apiService = {
   async fetchSettingsData() {
     const { sections } = PAGE_DATA.settingsPage;
     return { sections };
+  },
+
+  // ── Blend Configurator ────────────────────────────────────────────────────
+  async fetchBlendFamilies() {
+    // apiClient.baseURL is already "/api", so paths start after that prefix
+    const res = await apiClient.get("/configurator/families");
+    return res.data as Array<{ familyId: number; familyName: string }>;
+  },
+
+  async fetchBlends() {
+    const res = await apiClient.get("/configurator/blend");
+    return res.data as Array<{
+      blendId: number;
+      blendName: string;
+      blendDescription: string;
+      familyId: number;
+      familyName: string;
+    }>;
+  },
+
+  async upsertBlend(payload: {
+    action: 1 | 2 | 3;
+    blendId?: number | null;
+    blendName?: string;
+    blendDescription?: string | null;
+    familyId?: number;
+  }) {
+    const res = await apiClient.post("/configurator/blend/upsert", payload);
+    return res.data;
+  },
+
+  async downloadBlends() {
+    const res = await apiClient.get("/configurator/blend/download", { responseType: "blob" });
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const url = URL.createObjectURL(new Blob([res.data]));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Blends_${today}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  async uploadBlends(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await apiClient.post("/configurator/blend/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data as { inserted: number; updated: number; skipped: number; errors: string[] };
+  },
+
+  // ── Production Upload ─────────────────────────────────────────────────────
+  async downloadProductionTemplate(date: string) {
+    const res = await apiClient.get("/production/template", { params: { date }, responseType: "blob" });
+    const url = URL.createObjectURL(new Blob([res.data]));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Production_Template_${date}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  async uploadProductionData(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await apiClient.post("/production/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data as { message?: string; inserted?: number; updated?: number; errors?: string[] };
+  },
+
+  async fetchProductionData(date: string) {
+    const res = await apiClient.get("/production", { params: { date } });
+    return res.data;
   },
 };
 

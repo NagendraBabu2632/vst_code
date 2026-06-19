@@ -1,5 +1,5 @@
 import './SettingsPage.css';
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAppSelector } from "@/redux/hooks/reduxHooks";
 import { selectDropdownData } from "@/redux/slices/dropdownSlice";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -20,9 +20,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { apiService } from "@/services/api";
 
-const families = ["Family A", "Family B", "Family C", "Family D", "Family E"];
 const parameters = ["Moisture S1", "Moisture S2", "Moisture S3", "Moisture S4"];
+
+interface BlendFamily { familyId: number; familyName: string; }
+interface Blend { blendId: number; blendName: string; blendDescription: string; familyId: number; familyName: string; }
 const quarters = ["Q1 (Jan–Mar)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Oct–Dec)"];
 const currentYear = new Date().getFullYear();
 const years = [currentYear - 1, currentYear, currentYear + 1];
@@ -33,11 +36,26 @@ interface ToDSlot { label: "Peak" | "Off-Peak"; startTime: string; endTime: stri
 interface TariffEntry { id: string; type: TariffType; rate: number; fixedCharges: number; startDate: Date; endDate?: Date; todSlots?: ToDSlot[]; }
 
 const SettingsPage = () => {
-  const [skuList, setSkuList] = useState(["Family A", "Family B", "Family C", "Family D", "Family E"]);
-  const [newSku, setNewSku] = useState("");
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState("");
+  const [blends, setBlends] = useState<Blend[]>([]);
+  const [blendFamilies, setBlendFamilies] = useState<BlendFamily[]>([]);
+  const [blendLoading, setBlendLoading] = useState(false);
+  const [newBlendName, setNewBlendName] = useState("");
+  const [newBlendFamilyId, setNewBlendFamilyId] = useState("");
+  const [newBlendDescription, setNewBlendDescription] = useState("");
+  const [editingBlendId, setEditingBlendId] = useState<number | null>(null);
+  const [editBlendName, setEditBlendName] = useState("");
+  const [editBlendFamilyId, setEditBlendFamilyId] = useState("");
+  const [editBlendDescription, setEditBlendDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const blendFileInputRef = useRef<HTMLInputElement>(null);
+  const prodFileInputRef = useRef<HTMLInputElement>(null);
+
+  const [prodDate, setProdDate] = useState<Date>(new Date());
+  const [prodDateOpen, setProdDateOpen] = useState(false);
+  const [prodLoading, setProdLoading] = useState(false);
+  const [prodData, setProdData] = useState<any[]>([]);
+  const [prodColumns, setProdColumns] = useState<string[]>([]);
+  const [prodUploadResult, setProdUploadResult] = useState<{ message?: string; inserted?: number; updated?: number; errors?: string[] } | null>(null);
 
   const [tariffs, setTariffs] = useState<TariffEntry[]>([
     { id: "T-001", type: "Fixed", rate: 8.0, fixedCharges: 1500, startDate: new Date(currentYear, 0, 1), endDate: undefined },
@@ -140,16 +158,135 @@ const SettingsPage = () => {
     if (currentSpec) { setSpecLsl(String(currentSpec.lsl)); setSpecUsl(String(currentSpec.usl)); setSpecTarget(String(currentSpec.target)); }
   };
 
-  const addSku = () => {
-    const trimmed = newSku.trim(); if (!trimmed) return;
-    setSkuList([...skuList, trimmed]); setNewSku(""); toast.success(`Added "${trimmed}"`);
+  const loadBlends = async () => {
+    setBlendLoading(true);
+    try {
+      const [blendsData, familiesData] = await Promise.all([
+        apiService.fetchBlends(),
+        apiService.fetchBlendFamilies(),
+      ]);
+      setBlends(blendsData);
+      setBlendFamilies(familiesData);
+    } catch {
+      toast.error("Failed to load blend data");
+    } finally {
+      setBlendLoading(false);
+    }
   };
-  const deleteSku = (index: number) => { setSkuList(skuList.filter((_, i) => i !== index)); toast.info("Family removed"); };
-  const startEdit = (index: number) => { setEditingIndex(index); setEditValue(skuList[index]); };
-  const saveEdit = () => {
-    if (editingIndex === null) return;
-    const updated = [...skuList]; updated[editingIndex] = editValue.trim();
-    setSkuList(updated); setEditingIndex(null); toast.success("Family updated");
+
+  const handleAddBlend = async () => {
+    const name = newBlendName.trim();
+    if (!name) { toast.error("Blend name is required"); return; }
+    if (!newBlendFamilyId) { toast.error("Please select a family"); return; }
+    try {
+      await apiService.upsertBlend({ action: 1, blendId: null, blendName: name, blendDescription: newBlendDescription.trim() || null, familyId: Number(newBlendFamilyId) });
+      toast.success(`Blend "${name}" added`);
+      setNewBlendName(""); setNewBlendFamilyId(""); setNewBlendDescription("");
+      await loadBlends();
+    } catch (e: any) {
+      if (e?.response?.status === 409) toast.error("Blend name already exists");
+      else toast.error("Failed to add blend");
+    }
+  };
+
+  const startEditBlend = (blend: Blend) => {
+    setEditingBlendId(blend.blendId);
+    setEditBlendName(blend.blendName);
+    setEditBlendFamilyId(String(blend.familyId));
+    setEditBlendDescription(blend.blendDescription ?? "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (editingBlendId === null) return;
+    const name = editBlendName.trim();
+    if (!name) { toast.error("Blend name is required"); return; }
+    if (!editBlendFamilyId) { toast.error("Please select a family"); return; }
+    try {
+      await apiService.upsertBlend({ action: 2, blendId: editingBlendId, blendName: name, blendDescription: editBlendDescription.trim() || null, familyId: Number(editBlendFamilyId) });
+      toast.success("Blend updated");
+      setEditingBlendId(null);
+      await loadBlends();
+    } catch {
+      toast.error("Failed to update blend");
+    }
+  };
+
+  const handleDeleteBlend = async (blendId: number) => {
+    try {
+      await apiService.upsertBlend({ action: 3, blendId });
+      toast.info("Blend deactivated");
+      await loadBlends();
+    } catch {
+      toast.error("Failed to delete blend");
+    }
+  };
+
+  const handleBlendDownload = async () => {
+    try {
+      await apiService.downloadBlends();
+      toast.success("Download started");
+    } catch {
+      toast.error("Failed to download blends");
+    }
+  };
+
+  const handleBlendUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!["xlsx", "xls"].includes(ext || "")) { toast.error("Please upload an Excel file (.xlsx or .xls)"); return; }
+    try {
+      const result = await apiService.uploadBlends(file);
+      toast.success(`Uploaded: ${result.inserted} inserted, ${result.updated} updated`);
+      if (result.errors?.length) result.errors.forEach((err: string) => toast.warning(err));
+      await loadBlends();
+    } catch {
+      toast.error("Failed to upload blends");
+    } finally {
+      if (blendFileInputRef.current) blendFileInputRef.current.value = "";
+    }
+  };
+
+  const handleProdDownloadTemplate = async () => {
+    try {
+      await apiService.downloadProductionTemplate(format(prodDate, "yyyy-MM-dd"));
+      toast.success("Template downloaded");
+    } catch {
+      toast.error("Failed to download template");
+    }
+  };
+
+  const handleProdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!["xlsx", "xls"].includes(ext || "")) { toast.error("Please upload an Excel file (.xlsx or .xls)"); return; }
+    try {
+      const result = await apiService.uploadProductionData(file);
+      setProdUploadResult(result);
+      if (result.errors?.length) result.errors.forEach((err) => toast.warning(err));
+      else toast.success(result.message ?? "Production data uploaded successfully");
+    } catch {
+      toast.error("Failed to upload production data");
+    } finally {
+      if (prodFileInputRef.current) prodFileInputRef.current.value = "";
+    }
+  };
+
+  const handleProdQuery = async () => {
+    setProdLoading(true);
+    setProdData([]);
+    setProdColumns([]);
+    try {
+      const data = await apiService.fetchProductionData(format(prodDate, "yyyy-MM-dd"));
+      const rows = Array.isArray(data) ? data : [];
+      if (rows.length > 0) setProdColumns(Object.keys(rows[0]));
+      setProdData(rows);
+    } catch {
+      toast.error("Failed to fetch production data");
+    } finally {
+      setProdLoading(false);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,37 +303,91 @@ const SettingsPage = () => {
   const urlTab = new URLSearchParams(location.search).get("tab");
   const activeTab = urlTab && validTabs.includes(urlTab) ? urlTab : "sku";
 
+  useEffect(() => {
+    if (activeTab === "sku") loadBlends();
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <DashboardLayout>
       <div className="settings-page">
           <h2 className="page-title">Settings</h2>
           {activeTab === "sku" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
-              <div className="settings-section-head"><Package /><h3 className="settings-section-title">Blend Configuration</h3></div>
-              <Separator />
-              <div className="settings-add-row">
-                <Input placeholder="New family name" value={newSku} onChange={(e) => setNewSku(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addSku()} />
-                <Button onClick={addSku} size="sm"><Plus />Add</Button>
+              <div className="settings-section-head settings-section-head--between">
+                <div className="settings-head-row"><Package /><h3 className="settings-section-title">Blend Configuration</h3></div>
+                <div className="settings-head-row">
+                  <Button size="sm" variant="outline" onClick={handleBlendDownload}><Download />Download</Button>
+                  <Button size="sm" variant="outline" onClick={() => blendFileInputRef.current?.click()}><Upload />Upload</Button>
+                  <input ref={blendFileInputRef} type="file" accept=".xlsx,.xls" onChange={handleBlendUpload} className="settings-file-hidden" aria-label="Upload blends Excel file" />
+                </div>
               </div>
-              <div className="settings-sku-list">
-                {skuList.map((sku, i) => (
-                  <div key={i} className="settings-sku-row">
-                    {editingIndex === i ? (
-                      <div className="settings-sku-edit">
-                        <Input value={editValue} onChange={(e) => setEditValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveEdit()} />
-                        <Button size="sm" variant="outline" onClick={saveEdit}>Save</Button>
-                      </div>
-                    ) : (
-                      <>
-                        <span className="settings-sku-name">{sku}</span>
-                        <div className="settings-sku-actions">
-                          <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => startEdit(i)}><Pencil /></Button>
-                          <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => deleteSku(i)}><Trash2 /></Button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+              <Separator />
+              <div className="settings-blend-add-grid">
+                <Input placeholder="Blend name" value={newBlendName} onChange={(e) => setNewBlendName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddBlend()} />
+                <Dropdown
+                  value={newBlendFamilyId || undefined}
+                  onValueChange={setNewBlendFamilyId}
+                  placeholder="Select family"
+                  options={blendFamilies.map((f) => ({ value: String(f.familyId), label: f.familyName }))}
+                />
+                <Input placeholder="Description (optional)" value={newBlendDescription} onChange={(e) => setNewBlendDescription(e.target.value)} />
+                <Button onClick={handleAddBlend} size="sm"><Plus />Add</Button>
+              </div>
+              <div className="settings-table-wrap">
+                <table className="settings-table">
+                  <thead>
+                    <tr>
+                      <th className="text-left">Blend Name</th>
+                      <th className="text-left">Family</th>
+                      <th className="text-left">Description</th>
+                      <th className="text-left">Status</th>
+                      <th className="text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {blendLoading ? (
+                      <tr><td colSpan={5} className="settings-table-empty">Loading…</td></tr>
+                    ) : blends.length === 0 ? (
+                      <tr><td colSpan={5} className="settings-table-empty">No blends configured</td></tr>
+                    ) : blends.map((blend) => (
+                      <tr key={blend.blendId}>
+                        {editingBlendId === blend.blendId ? (
+                          <>
+                            <td><Input value={editBlendName} onChange={(e) => setEditBlendName(e.target.value)} /></td>
+                            <td>
+                              <Dropdown
+                                value={editBlendFamilyId || undefined}
+                                onValueChange={setEditBlendFamilyId}
+                                options={blendFamilies.map((f) => ({ value: String(f.familyId), label: f.familyName }))}
+                              />
+                            </td>
+                            <td><Input value={editBlendDescription} onChange={(e) => setEditBlendDescription(e.target.value)} /></td>
+                            <td><Badge variant="outline" className="settings-badge-offpeak settings-badge-sm">Active</Badge></td>
+                            <td>
+                              <div className="settings-actions-cell">
+                                <Button size="sm" variant="outline" onClick={handleSaveEdit}>Save</Button>
+                                <Button size="sm" variant="ghost" onClick={() => setEditingBlendId(null)}>Cancel</Button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="medium">{blend.blendName}</td>
+                            <td className="small">{blend.familyName}</td>
+                            <td className="small muted">{blend.blendDescription || "—"}</td>
+                            <td><Badge variant="outline" className="settings-badge-offpeak settings-badge-sm">Active</Badge></td>
+                            <td>
+                              <div className="settings-actions-cell">
+                                <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => startEditBlend(blend)}><Pencil /></Button>
+                                <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => handleDeleteBlend(blend.blendId)}><Trash2 /></Button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </motion.div>
           )}
@@ -473,15 +664,90 @@ const SettingsPage = () => {
           {activeTab === "upload" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
               <div className="settings-section-head"><Upload /><h3 className="settings-section-title">Production Data Upload</h3></div>
+              <p className="settings-section-desc">Download the template for a production date, fill in the data, and upload it back. Use Query to verify what was uploaded.</p>
               <Separator />
-              <div className="settings-upload-zone">
-                <Upload />
-                <p>Upload production data file</p>
-                <p className="small">Accepted formats: CSV, XLSX, XLS</p>
-                <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} aria-label="Upload production data file" />
-                <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="settings-upload-icon" />Select File
-                </Button>
+
+              <div className="settings-prod-date-row">
+                <Label>Production Date</Label>
+                <Popover open={prodDateOpen} onOpenChange={setProdDateOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="settings-btn--full-start settings-prod-date-btn">
+                      <CalendarIcon className="settings-cal-icon" />
+                      {format(prodDate, "dd MMM yyyy")}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={prodDate} onSelect={(d) => { if (d) { setProdDate(d); setProdDateOpen(false); } }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="settings-grid-2">
+                <div className="settings-ec-card">
+                  <div className="settings-ec-card-head"><Download /><h4 className="settings-ec-card-title">Download Template</h4></div>
+                  <p className="settings-ec-card-desc">Download the Excel template for {format(prodDate, "dd MMM yyyy")}. Fill in the production data and upload it back.</p>
+                  <Button variant="outline" size="sm" onClick={handleProdDownloadTemplate}>
+                    <Download /> Download Template
+                  </Button>
+                </div>
+
+                <div className="settings-ec-card dashed">
+                  <Upload className="settings-ec-card-upload-icon" />
+                  <p>Upload production data</p>
+                  <p className="settings-ec-card-desc">Accepted: XLSX, XLS</p>
+                  <input ref={prodFileInputRef} type="file" accept=".xlsx,.xls" onChange={handleProdUpload} aria-label="Upload production data file" />
+                  <Button variant="outline" size="sm" onClick={() => prodFileInputRef.current?.click()}>
+                    <Upload /> Select File
+                  </Button>
+                  {prodUploadResult && (
+                    <div className="settings-prod-upload-result">
+                      {prodUploadResult.message && <span>{prodUploadResult.message}</span>}
+                      {typeof prodUploadResult.inserted === "number" && (
+                        <span>{prodUploadResult.inserted} inserted, {prodUploadResult.updated ?? 0} updated</span>
+                      )}
+                      {prodUploadResult.errors?.map((err, i) => (
+                        <span key={i} className="settings-prod-upload-error">{err}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="settings-section settings-section--gap-sm">
+                <div className="settings-section-head settings-section-head--between">
+                  <h4 className="settings-history-head"><History /> Production Data — {format(prodDate, "dd MMM yyyy")}</h4>
+                  <Button size="sm" onClick={handleProdQuery} disabled={prodLoading}>
+                    {prodLoading ? "Loading…" : "Query Data"}
+                  </Button>
+                </div>
+                <div className="settings-table-wrap">
+                  <table className="settings-table">
+                    {prodColumns.length > 0 && (
+                      <thead>
+                        <tr>
+                          {prodColumns.map((col) => (
+                            <th key={col} className="text-left">{col}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                    )}
+                    <tbody>
+                      {prodLoading ? (
+                        <tr><td colSpan={prodColumns.length || 1} className="settings-table-empty">Loading…</td></tr>
+                      ) : prodData.length === 0 ? (
+                        <tr><td colSpan={Math.max(prodColumns.length, 1)} className="settings-table-empty">No production data for this date. Click "Query Data" to load, or upload a file first.</td></tr>
+                      ) : prodData.map((row, i) => (
+                        <tr key={i}>
+                          {prodColumns.map((col) => (
+                            <td key={col} className="small">{row[col] ?? "—"}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </motion.div>
           )}
@@ -696,7 +962,7 @@ const AlertConfigurator = () => {
               <th className="text-left">Severity</th>
               <th className="text-left">Recipients</th>
               <th className="text-left">Status</th>
-              <th></th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -793,7 +1059,7 @@ const AlertConfigurator = () => {
                 {draft.emails.map((e) => (
                   <Badge key={e} variant="outline" className="settings-chip">
                     {e}
-                    <button onClick={() => removeEmail(e)} className="settings-chip-remove" aria-label="Remove email recipient">
+                    <button type="button" onClick={() => removeEmail(e)} className="settings-chip-remove" aria-label="Remove email recipient">
                       <X className="settings-chip-remove-icon" />
                     </button>
                   </Badge>
@@ -834,7 +1100,7 @@ const AlertConfigurator = () => {
                         {draft.daily.users.map((u) => (
                           <Badge key={u} variant="outline" className="settings-chip">
                             {u}
-                            <button onClick={() => removeDailyUser(u)} className="settings-chip-remove" aria-label="Remove daily recipient">
+                            <button type="button" onClick={() => removeDailyUser(u)} className="settings-chip-remove" aria-label="Remove daily recipient">
                               <X className="settings-chip-remove-icon" />
                             </button>
                           </Badge>
@@ -865,7 +1131,7 @@ const AlertConfigurator = () => {
                         {draft.shiftWise.users.map((u) => (
                           <Badge key={u} variant="outline" className="settings-chip">
                             {u}
-                            <button onClick={() => removeShiftUser(u)} className="settings-chip-remove" aria-label="Remove shift recipient">
+                            <button type="button" onClick={() => removeShiftUser(u)} className="settings-chip-remove" aria-label="Remove shift recipient">
                               <X className="settings-chip-remove-icon" />
                             </button>
                           </Badge>

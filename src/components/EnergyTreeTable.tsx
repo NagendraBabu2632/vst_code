@@ -252,18 +252,23 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
             {/* X baseline */}
             <line x1={0} x2={innerW} y1={innerH} y2={innerH} stroke="var(--border)" />
 
-            {/* X-axis labels — every 3rd slot */}
-            {slotLabels.map((label, i) => {
-              if (i % 3 !== 0) return null;
-              const x = chartType === "line"
-                ? (xLine(i) ?? 0)
-                : (xBar(i) ?? 0) + xBar.bandwidth() / 2;
-              return (
-                <text key={i} x={x} y={innerH + 16} fontSize={10} textAnchor="middle" fill="var(--muted-foreground)">
-                  {label.split(" - ")[0]}
-                </text>
-              );
-            })}
+            {/* X-axis labels — show as many as fit without overlapping */}
+            {(() => {
+              const labelPx = 42; // estimated px each label occupies at font-size 10
+              const maxVisible = Math.max(1, Math.floor(innerW / labelPx));
+              const step = Math.max(1, Math.ceil(slotLabels.length / maxVisible));
+              return slotLabels.map((label, i) => {
+                if (i % step !== 0) return null;
+                const x = chartType === "line"
+                  ? (xLine(i) ?? 0)
+                  : (xBar(i) ?? 0) + xBar.bandwidth() / 2;
+                return (
+                  <text key={i} x={x} y={innerH + 16} fontSize={10} textAnchor="middle" fill="var(--muted-foreground)">
+                    {label.split(" - ")[0]}
+                  </text>
+                );
+              });
+            })()}
           </g>
         </svg>
       </div>

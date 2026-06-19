@@ -16,6 +16,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/exec-api/, ""),
       },
+      "/api": {
+        target: "http://172.16.0.177:8018",
+        changeOrigin: true,
+      },
     },
   },
 });
