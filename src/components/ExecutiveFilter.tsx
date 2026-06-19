@@ -46,17 +46,54 @@ const monthOptions = (() => {
   return out.reverse();
 })();
 
+/** Returns the shift id that is currently active based on wall-clock time. */
+function getCurrentShiftId(): string {
+  const now = new Date();
+  const total = now.getHours() * 60 + now.getMinutes();
+  if (total >= 420 && total < 930)  return "A"; // 07:00–15:30
+  if (total >= 930 && total < 1380) return "B"; // 15:30–23:00
+  return "C";                                    // 23:00–07:00
+}
+
 const ExecutiveFilter = ({ value, onChange }: Props) => {
   const [open, setOpen] = useState(false);
+
+  // Pending state — local to the popover; only committed on Submit
+  const [pendingDate,   setPendingDate]   = useState<Date>(value.date);
+  const [pendingShifts, setPendingShifts] = useState<string[]>(value.shifts);
+
+  const currentShiftId = getCurrentShiftId();
+
+  // When the popover opens, reset pending to the last committed value
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setPendingDate(value.date);
+      setPendingShifts(value.shifts);
+    }
+    setOpen(nextOpen);
+  };
 
   const setMode = (mode: ExecMode) => onChange({ ...value, mode });
 
   const toggleShift = (id: string) => {
-    const has = value.shifts.includes(id);
-    onChange({
-      ...value,
-      shifts: has ? value.shifts.filter((s) => s !== id) : [...value.shifts, id],
+    setPendingShifts((prev) => {
+      if (prev.includes(id)) {
+        // Uncheck
+        return prev.filter((s) => s !== id);
+      }
+      // Selecting Daily → clear A/B/C; selecting A/B/C → clear Daily
+      const cleared = id === "D"
+        ? prev.filter((s) => s === "D")   // remove A, B, C
+        : prev.filter((s) => s !== "D");  // remove Daily
+      return [...cleared, id];
     });
+  };
+
+  const handleSubmit = () => {
+    // Default to Daily if user cleared all selections
+    const finalShifts = pendingShifts.length === 0 ? ["D"] : pendingShifts;
+    onChange({ ...value, date: pendingDate, shifts: finalShifts });
+    setOpen(false);
   };
 
   const weekCount = getWeeksInMonth(value.date, { weekStartsOn: 1 });
@@ -71,7 +108,7 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
           ? "All shifts"
           : value.shifts.map((s) => (s === "D" ? "Daily" : `Shift ${s}`)).join(", ");
       return (
-        <button className="exec-filter__trigger">
+        <button type="button" className="exec-filter__trigger">
           <span className="exec-filter__trigger-inner">
             <CalendarIcon className="exec-filter__trigger-icon" />
             {format(value.date, "dd/MM/yyyy")}
@@ -81,9 +118,6 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
           <ChevronDown className="exec-filter__trigger-chevron" />
         </button>
       );
-    }
-    if (value.mode === "week") {
-      return null;
     }
     return null;
   };
@@ -96,6 +130,7 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
         <div className="exec-filter__tabs">
           {TABS.map((t) => (
             <button
+              type="button"
               key={t.value}
               onClick={() => setMode(t.value)}
               className={
@@ -116,43 +151,52 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
         </label>
 
         {value.mode === "day" && (
-          <Popover open={open} onOpenChange={setOpen}>
+          <Popover open={open} onOpenChange={handleOpenChange}>
             <PopoverTrigger asChild>{renderTrigger()}</PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
               <div className="exec-filter__popover-body">
-                {/* Calendar */}
+                {/* Calendar — updates pending date only */}
                 <div className="exec-filter__calendar-side">
                   <Calendar
                     mode="single"
-                    selected={value.date}
-                    onSelect={(d) => d && onChange({ ...value, date: d })}
+                    selected={pendingDate}
+                    onSelect={(d) => d && setPendingDate(d)}
                     disabled={(date) => date > new Date()}
                     initialFocus
                     className="p-3 pointer-events-auto"
                   />
                 </div>
-                {/* Shifts */}
+
+                {/* Shifts + Submit */}
                 <div className="exec-filter__shifts">
                   <div className="exec-filter__shifts-title">Shift</div>
                   <div className="exec-filter__shift-list">
                     {SHIFTS.map((s) => {
-                      const checked = value.shifts.includes(s.id);
+                      const checked = pendingShifts.includes(s.id);
+                      const isCurrent = s.id === currentShiftId;
                       return (
-                        <label
-                          key={s.id}
-                          className="exec-filter__shift-row"
-                        >
+                        <label key={s.id} className="exec-filter__shift-row">
                           <Checkbox
                             checked={checked}
                             onCheckedChange={() => toggleShift(s.id)}
                           />
                           <span className="exec-filter__shift-name">{s.label}</span>
                           <span className="exec-filter__shift-time">{s.time}</span>
-                          <span className="exec-filter__shift-asterisk">*</span>
+                          {isCurrent && (
+                            <span className="exec-filter__shift-asterisk">*</span>
+                          )}
                         </label>
                       );
                     })}
                   </div>
+
+                  <button
+                    type="button"
+                    className="exec-filter__submit-btn"
+                    onClick={handleSubmit}
+                  >
+                    Submit
+                  </button>
                 </div>
               </div>
             </PopoverContent>
@@ -161,10 +205,9 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
 
         {value.mode === "week" && (
           <div className="exec-filter__week-row">
-            {/* Month picker for context */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className="exec-filter__month-trigger">
+                <button type="button" className="exec-filter__month-trigger">
                   <CalendarIcon className="exec-filter__month-trigger-icon" />
                   {format(value.date, "MMM yyyy")}
                 </button>

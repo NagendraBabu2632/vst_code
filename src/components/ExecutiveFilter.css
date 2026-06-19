@@ -182,6 +182,25 @@
   color: var(--critical);
 }
 
+/* ── Submit button inside shift panel ─────────────────────────────── */
+.exec-filter__submit-btn {
+  margin-top: 1rem;
+  width: 100%;
+  height: 2rem;
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.exec-filter__submit-btn:hover {
+  opacity: 0.88;
+}
+
 /* ── Week mode — container ─────────────────────────────────────────── */
 .exec-filter__week-row {
   display: flex;
