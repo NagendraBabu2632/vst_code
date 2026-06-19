@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback } from "react";
+import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { BarChart2, ChevronRight, LineChart, TrendingUp, X } from "lucide-react";
 import * as d3 from "d3";
 import { useChartSize } from "@/components/charts/useChartSize";
@@ -54,6 +54,14 @@ function hashString(s: string): number {
   return h >>> 0;
 }
 
+// Format ISO date strings ("2026-06-07") → "Jun 07"; pass through other labels unchanged
+function fmtLabel(label: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(label)) {
+    return new Date(label + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+  }
+  return label.split(" - ")[0]; // for hour labels like "06 AM - 07 AM"
+}
+
 function dayCountFor(period: EnergyPeriod): number {
   if (period === "7days") return 7;
   if (period === "30days") return 30;
@@ -86,7 +94,12 @@ function toDayValues(id: string, hourly: number[], n: number): number[] {
 const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsset; slotLabels: string[]; onClose: () => void }) => {
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const { ref: chartWrapRef, width } = useChartSize<HTMLDivElement>(760);
+
+  useEffect(() => {
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
 
   const H = 240;
   const ML = 44, MR = 16, MT = 16, MB = 32;
@@ -144,7 +157,7 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
   }, []);
 
   return (
-    <div className="energy-trend-panel">
+    <div className="energy-trend-panel" ref={panelRef}>
       <div className="energy-trend-head">
         <div>
           <div className="energy-trend-eyebrow"><TrendingUp size={12} /> Asset Trend</div>
@@ -182,7 +195,7 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
       </div>
 
       <div className="energy-trend-chart-wrap" ref={chartWrapRef}>
-        <svg height={H} className="energy-trend-svg">
+        <svg height={H} overflow="visible" className="energy-trend-svg">
           <defs>
             <linearGradient id="energyTrendFill" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.35" />
@@ -264,7 +277,7 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
                   : (xBar(i) ?? 0) + xBar.bandwidth() / 2;
                 return (
                   <text key={i} x={x} y={innerH + 16} fontSize={10} textAnchor="middle" fill="var(--muted-foreground)">
-                    {label.split(" - ")[0]}
+                    {fmtLabel(label)}
                   </text>
                 );
               });
@@ -301,8 +314,10 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
   const columns = useMemo(() => {
     if (viewMode === "hour") return slotLabels;
     if (viewMode === "shift") return shiftLabels;
+    // For day view: prefer real API slot labels (actual dates) over generated ones
+    if (apiSlotLabels.length) return apiSlotLabels;
     return dayLabels(dayCountFor(period));
-  }, [viewMode, period, slotLabels, shiftLabels]);
+  }, [viewMode, period, slotLabels, shiftLabels, apiSlotLabels]);
 
   const valuesFor = (id: string, hourly: number[], shiftKwh?: number[]): number[] => {
     if (viewMode === "hour") return hourly;
@@ -413,7 +428,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
                     key={label + i}
                     className={`energy-tree-th energy-tree-th-hour ${i % 2 === 0 ? "is-even" : "is-odd"}`}
                   >
-                    {label}
+                    {fmtLabel(label)}
                   </th>
                 ))}
               </tr>

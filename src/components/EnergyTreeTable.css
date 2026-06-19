@@ -302,6 +302,6 @@
 }
 .energy-trend-close:hover { background: var(--muted); color: var(--foreground); }
 
-.energy-trend-chart-wrap { width: 100%; }
+.energy-trend-chart-wrap { width: 100%; padding-bottom: 8px; }
 .energy-trend-svg { display: block; width: 100%; }
 .energy-trend-data-point { cursor: pointer; }
