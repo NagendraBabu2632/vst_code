@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import KpiCard from "@/components/KpiCard/KpiCard";
-import ExecutiveFilter, { type ExecFilterValue } from "@/components/ExecutiveFilter";
+import ExecutiveFilter, { type ExecFilterValue, type WeekOption, type MonthOption } from "@/components/ExecutiveFilter";
 import Loader from "@/components/Loader/Loader";
 import { format, addDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
@@ -18,6 +18,7 @@ import {
 } from "@/redux/slices/executiveSummarySlice";
 import { fetchAlertsData, selectAlerts } from "@/redux/slices/alertsSlice";
 import type { ExecApiPayload } from "@/redux/slices/dropdownSlice";
+import { selectDropdownData } from "@/redux/slices/dropdownSlice";
 import {
   Zap, IndianRupee, Gauge, Droplets, Wind,
   Trophy, TrendingDown, BarChart3, Table2, Factory, Bell,
@@ -44,27 +45,23 @@ const getMoistureStatus = (v: number) => {
 };
 
 const buildExecApiPayload = (filter: ExecFilterValue): ExecApiPayload => {
-  const fmt = (d: Date) => format(d, "yyyy-MM-dd");
+  const fmtDate = (d: Date) => format(d, "yyyy-MM-dd");
   if (filter.mode === "day") {
     return {
-      dateRange: { from: fmt(filter.date), to: fmt(filter.date) },
+      dateRange: { from: fmtDate(filter.date), to: fmtDate(filter.date) },
       dateFilter: "day",
       shifts: filter.shifts,
     };
   }
   if (filter.mode === "week") {
-    const weekIndex = parseInt(filter.week.replace("W", ""), 10) - 1;
-    const from = addDays(startOfMonth(filter.date), weekIndex * 7);
-    const to = addDays(from, 6);
-    const monthEnd = endOfMonth(filter.date);
-    return {
-      dateRange: { from: fmt(from), to: fmt(to > monthEnd ? monthEnd : to) },
-      dateFilter: "week",
-    };
+    // Use API-provided dates directly; fall back to today if not yet loaded
+    const from = filter.week    || fmtDate(new Date());
+    const to   = filter.weekEnd || fmtDate(addDays(new Date(), 6));
+    return { dateRange: { from, to }, dateFilter: "week" };
   }
   const monthDate = parseISO(filter.month + "-01");
   return {
-    dateRange: { from: fmt(startOfMonth(monthDate)), to: fmt(endOfMonth(monthDate)) },
+    dateRange: { from: format(startOfMonth(monthDate), "yyyy-MM-dd"), to: format(endOfMonth(monthDate), "yyyy-MM-dd") },
     dateFilter: "month",
   };
 };
@@ -83,21 +80,40 @@ const ExecutiveSummary = () => {
   const trendData    = useAppSelector(selectTrendData);
   const top5Data     = useAppSelector(selectTop5Data);
   const alerts       = useAppSelector(selectAlerts);
+  const dropdownData = useAppSelector(selectDropdownData);
+
+  const weeksData  = (dropdownData?.weeks  ?? []) as WeekOption[];
+  const monthsData = (dropdownData?.months ?? []) as MonthOption[];
 
   const [execFilter, setExecFilter] = useState<ExecFilterValue>({
     mode: "day",
     date: new Date(),
     shifts: ["A"],
-    week: "W1",
+    week: "",
+    weekEnd: "",
     month: format(new Date(), "yyyy-MM"),
   });
+
+  // Once the weeks API data arrives, default to the current ISO week
+  useEffect(() => {
+    if (!weeksData.length) return;
+    const currentWeek = weeksData.find((w) => w.isCurrent);
+    if (currentWeek) {
+      setExecFilter((prev) => ({
+        ...prev,
+        week:    currentWeek.weekStartDate,
+        weekEnd: currentWeek.weekEndDate,
+      }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeksData.length]);
   const [top5Mode, setTop5Mode] = useState<Top5Mode>("consumption");
   const [top5View, setTop5View] = useState<Top5View>("chart");
 
   useEffect(() => {
     dispatch(fetchExecutiveSummaryData(buildExecApiPayload(execFilter)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, execFilter.mode, execFilter.date.getTime(), execFilter.week, execFilter.month, execFilter.shifts.join(",")]);
+  }, [dispatch, execFilter.mode, execFilter.date.getTime(), execFilter.week, execFilter.weekEnd, execFilter.month, execFilter.shifts.join(",")]);
 
   useEffect(() => {
     dispatch(fetchAlertsData());
@@ -167,7 +183,12 @@ const ExecutiveSummary = () => {
       <div className="exec-filter-bar">
         <h2 className="page-title">Executive Summary</h2>
         <div className="exec-filter-bar-right">
-          <ExecutiveFilter value={execFilter} onChange={setExecFilter} />
+          <ExecutiveFilter
+            value={execFilter}
+            onChange={setExecFilter}
+            weeks={weeksData}
+            months={monthsData}
+          />
         </div>
       </div>
 

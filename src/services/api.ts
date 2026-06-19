@@ -198,15 +198,28 @@ export const apiService = {
 
   // ── Dropdown / Master data ───────────────────────────────────────────────
   async fetchDropdownData() {
-    console.log("[Dropdowns] GET /dropdowns/all");
-    try {
-      const res = await execClient.get("/dropdowns/all");
-      console.log("[Dropdowns] Response →", res.data);
-      return { ...DROPDOWN_DATA, common: buildDropdownCommon(res.data) };
-    } catch (err) {
-      console.warn("[Dropdowns] API unavailable, falling back to static data", err);
-      return DROPDOWN_DATA;
+    console.log("[Dropdowns] GET /dropdowns/all + /weeks + /months");
+    const [allResult, weeksResult, monthsResult] = await Promise.allSettled([
+      execClient.get("/dropdowns/all"),
+      execClient.get("/dropdowns/weeks"),
+      execClient.get("/dropdowns/months"),
+    ]);
+
+    let common = DROPDOWN_DATA.common;
+    if (allResult.status === "fulfilled") {
+      try { common = buildDropdownCommon(allResult.value.data); } catch (e) {
+        console.warn("[Dropdowns] Failed to build common from /dropdowns/all", e);
+      }
+    } else {
+      console.warn("[Dropdowns] /dropdowns/all failed", (allResult as any).reason);
     }
+
+    const weeks  = weeksResult.status  === "fulfilled" ? weeksResult.value.data  : [];
+    const months = monthsResult.status === "fulfilled" ? monthsResult.value.data : [];
+    if (weeksResult.status  !== "fulfilled") console.warn("[Dropdowns] /dropdowns/weeks failed");
+    if (monthsResult.status !== "fulfilled") console.warn("[Dropdowns] /dropdowns/months failed");
+
+    return { ...DROPDOWN_DATA, common, weeks, months };
   },
 
   // ── Executive Summary — individual endpoint methods ──────────────────────

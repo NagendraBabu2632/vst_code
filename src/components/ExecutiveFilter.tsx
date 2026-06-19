@@ -1,8 +1,7 @@
 import "./ExecutiveFilter.css";
 import { useState } from "react";
-import { format, getWeeksInMonth, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { format, addMonths, parseISO } from "date-fns";
 import { CalendarIcon, ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -10,17 +9,38 @@ import Dropdown from "@/components/Dropdown";
 
 export type ExecMode = "day" | "week" | "month";
 
+export interface WeekOption {
+  id: number;
+  year: number;
+  week: string;           // "W25"
+  weekStartDate: string;  // "2026-06-15"
+  weekEndDate: string;    // "2026-06-21"
+  isCurrent: boolean;
+}
+
+export interface MonthOption {
+  id: number;
+  year: number;
+  month: string;          // "Jun"
+  monthStartDate: string; // "2026-06-01"
+  monthEndDate: string;   // "2026-06-30"
+  isCurrent: boolean;
+}
+
 export interface ExecFilterValue {
   mode: ExecMode;
-  date: Date;          // for day
-  shifts: string[];    // for day (Shift A/B/C/Daily)
-  week: string;        // for week (W1..W5)
-  month: string;       // for month (yyyy-MM)
+  date: Date;           // for day mode
+  shifts: string[];     // for day mode  (A/B/C/D)
+  week: string;         // weekStartDate from API e.g. "2026-06-15"
+  weekEnd: string;      // weekEndDate from API e.g. "2026-06-21"
+  month: string;        // yyyy-MM e.g. "2026-06"
 }
 
 interface Props {
   value: ExecFilterValue;
   onChange: (v: ExecFilterValue) => void;
+  weeks?: WeekOption[];
+  months?: MonthOption[];
 }
 
 const SHIFTS = [
@@ -31,12 +51,13 @@ const SHIFTS = [
 ];
 
 const TABS: { value: ExecMode; label: string }[] = [
-  { value: "day", label: "Day" },
-  { value: "week", label: "Week" },
+  { value: "day",   label: "Day"   },
+  { value: "week",  label: "Week"  },
   { value: "month", label: "Month" },
 ];
 
-const monthOptions = (() => {
+// Static fallback months (last 12 months) used if API hasn't loaded yet
+const STATIC_MONTH_OPTIONS = (() => {
   const out: { value: string; label: string }[] = [];
   const base = new Date();
   for (let i = -11; i <= 0; i++) {
@@ -55,7 +76,7 @@ function getCurrentShiftId(): string {
   return "C";                                    // 23:00–07:00
 }
 
-const ExecutiveFilter = ({ value, onChange }: Props) => {
+const ExecutiveFilter = ({ value, onChange, weeks = [], months = [] }: Props) => {
   const [open, setOpen] = useState(false);
 
   // Pending state — local to the popover; only committed on Submit
@@ -77,54 +98,58 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
 
   const toggleShift = (id: string) => {
     setPendingShifts((prev) => {
-      if (prev.includes(id)) {
-        // Uncheck
-        return prev.filter((s) => s !== id);
-      }
-      // Selecting Daily → clear A/B/C; selecting A/B/C → clear Daily
+      if (prev.includes(id)) return prev.filter((s) => s !== id);
+      // Daily ↔ Shift A/B/C are mutually exclusive
       const cleared = id === "D"
-        ? prev.filter((s) => s === "D")   // remove A, B, C
-        : prev.filter((s) => s !== "D");  // remove Daily
+        ? prev.filter((s) => s === "D")
+        : prev.filter((s) => s !== "D");
       return [...cleared, id];
     });
   };
 
   const handleSubmit = () => {
-    // Default to Daily if user cleared all selections
     const finalShifts = pendingShifts.length === 0 ? ["D"] : pendingShifts;
     onChange({ ...value, date: pendingDate, shifts: finalShifts });
     setOpen(false);
   };
 
-  const weekCount = getWeeksInMonth(value.date, { weekStartsOn: 1 });
-  const weekOptions = Array.from({ length: weekCount }, (_, i) => `W${i + 1}`);
+  // ── Week dropdown options from API (most recent first) ──────────────
+  const weekOptions = weeks.map((w) => ({
+    value: w.weekStartDate,
+    label: `${w.week}  ·  ${format(parseISO(w.weekStartDate), "MMM d")}–${format(parseISO(w.weekEndDate), "MMM d, yyyy")}`,
+  }));
 
-  const renderTrigger = () => {
-    if (value.mode === "day") {
-      const shiftLabel =
-        value.shifts.length === 0
-          ? "No shift"
-          : value.shifts.length === SHIFTS.length
-          ? "All shifts"
-          : value.shifts.map((s) => (s === "D" ? "Daily" : `Shift ${s}`)).join(", ");
-      return (
-        <button type="button" className="exec-filter__trigger">
-          <span className="exec-filter__trigger-inner">
-            <CalendarIcon className="exec-filter__trigger-icon" />
-            {format(value.date, "dd/MM/yyyy")}
-            <span className="exec-filter__trigger-sep">·</span>
-            <span className="exec-filter__trigger-shift">{shiftLabel}</span>
-          </span>
-          <ChevronDown className="exec-filter__trigger-chevron" />
-        </button>
-      );
-    }
-    return null;
+  // ── Month dropdown options from API (or static fallback) ────────────
+  const monthOptions = months.length
+    ? months.map((m) => ({
+        value: format(parseISO(m.monthStartDate), "yyyy-MM"),
+        label: `${m.month}-${m.year}`,
+      }))
+    : STATIC_MONTH_OPTIONS;
+
+  const renderDayTrigger = () => {
+    const shiftLabel =
+      value.shifts.length === 0
+        ? "No shift"
+        : value.shifts.length === SHIFTS.length
+        ? "All shifts"
+        : value.shifts.map((s) => (s === "D" ? "Daily" : `Shift ${s}`)).join(", ");
+    return (
+      <button type="button" className="exec-filter__trigger">
+        <span className="exec-filter__trigger-inner">
+          <CalendarIcon className="exec-filter__trigger-icon" />
+          {format(value.date, "dd/MM/yyyy")}
+          <span className="exec-filter__trigger-sep">·</span>
+          <span className="exec-filter__trigger-shift">{shiftLabel}</span>
+        </span>
+        <ChevronDown className="exec-filter__trigger-chevron" />
+      </button>
+    );
   };
 
   return (
     <div className="exec-filter">
-      {/* Tabs */}
+      {/* Period tabs */}
       <div className="exec-filter__tabs-group">
         <label className="exec-filter__label">Period</label>
         <div className="exec-filter__tabs">
@@ -133,10 +158,7 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
               type="button"
               key={t.value}
               onClick={() => setMode(t.value)}
-              className={
-                "exec-filter__tab" +
-                (value.mode === t.value ? " exec-filter__tab--active" : "")
-              }
+              className={"exec-filter__tab" + (value.mode === t.value ? " exec-filter__tab--active" : "")}
             >
               {t.label}
             </button>
@@ -150,9 +172,10 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
           {value.mode === "day" ? "Date & Shift" : value.mode === "week" ? "Week" : "Month"}
         </label>
 
+        {/* ── Day mode ── */}
         {value.mode === "day" && (
           <Popover open={open} onOpenChange={handleOpenChange}>
-            <PopoverTrigger asChild>{renderTrigger()}</PopoverTrigger>
+            <PopoverTrigger asChild>{renderDayTrigger()}</PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
               <div className="exec-filter__popover-body">
                 {/* Calendar — updates pending date only */}
@@ -189,12 +212,7 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
                       );
                     })}
                   </div>
-
-                  <button
-                    type="button"
-                    className="exec-filter__submit-btn"
-                    onClick={handleSubmit}
-                  >
+                  <button type="button" className="exec-filter__submit-btn" onClick={handleSubmit}>
                     Submit
                   </button>
                 </div>
@@ -203,61 +221,28 @@ const ExecutiveFilter = ({ value, onChange }: Props) => {
           </Popover>
         )}
 
+        {/* ── Week mode — single dropdown from API ── */}
         {value.mode === "week" && (
-          <div className="exec-filter__week-row">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button type="button" className="exec-filter__month-trigger">
-                  <CalendarIcon className="exec-filter__month-trigger-icon" />
-                  {format(value.date, "MMM yyyy")}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <div className="exec-filter__month-nav">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onChange({ ...value, date: subMonths(value.date, 1) })}
-                  >
-                    ‹
-                  </Button>
-                  <span className="exec-filter__month-nav-name">
-                    {format(value.date, "MMMM yyyy")}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onChange({ ...value, date: addMonths(value.date, 1) })}
-                  >
-                    ›
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            <Dropdown
-              value={value.week}
-              onValueChange={(v) => onChange({ ...value, week: v })}
-              placeholder="Select week"
-              triggerClassName="exec-filter__week-dropdown"
-              options={weekOptions.map((w, i) => {
-                const monthStart = startOfMonth(value.date);
-                const monthEnd = endOfMonth(value.date);
-                return {
-                  value: w,
-                  label: `${w}  ·  ${format(monthStart, "MMM")} ${i * 7 + 1}–${Math.min((i + 1) * 7, monthEnd.getDate())}`,
-                };
-              })}
-            />
-          </div>
+          <Dropdown
+            value={value.week}
+            onValueChange={(v) => {
+              const sel = weeks.find((w) => w.weekStartDate === v);
+              onChange({ ...value, week: v, weekEnd: sel?.weekEndDate ?? "" });
+            }}
+            placeholder={weeks.length ? "Select week" : "Loading weeks…"}
+            triggerClassName="exec-filter__week-dropdown"
+            options={weekOptions}
+          />
         )}
 
+        {/* ── Month mode ── */}
         {value.mode === "month" && (
           <Dropdown
             value={value.month}
             onValueChange={(v) => onChange({ ...value, month: v })}
             placeholder="Select month"
             triggerClassName="w-[200px]"
-            options={monthOptions.map((m) => ({ value: m.value, label: m.label }))}
+            options={monthOptions}
           />
         )}
       </div>

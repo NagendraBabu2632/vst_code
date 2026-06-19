@@ -27,10 +27,16 @@ export const buildExecParams = (payload: ExecPayload): Record<string, any> => {
     start_date: payload.dateRange?.from,
     end_date:   payload.dateRange?.to,
   };
-  if (payload.shifts?.length) {
-    params.shift_detail = payload.shifts
-      .map((s) => SHIFT_NUMBER[s] ?? s)
-      .join('');
+  if (payload.dateFilter === "day") {
+    // Day mode: encode selected shifts (A→1, B→2, C→3, D→4)
+    if (payload.shifts?.length) {
+      params.shift_detail = payload.shifts
+        .map((s) => SHIFT_NUMBER[s] ?? s)
+        .join('');
+    }
+  } else {
+    // Week / month mode: always send 4 (all shifts + summary)
+    params.shift_detail = 4;
   }
   return params;
 };

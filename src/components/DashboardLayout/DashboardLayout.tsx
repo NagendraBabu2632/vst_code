@@ -17,7 +17,7 @@ interface DashboardLayoutProps {
 }
 
 const SETTINGS_TABS = [
-  { value: "sku", label: "Family" },
+  { value: "sku", label: "Blend" },
   { value: "tariff", label: "Tariff" },
   { value: "moisture-specs", label: "Moisture Specs" },
   { value: "process", label: "Process Params" },

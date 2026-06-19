@@ -172,7 +172,7 @@ const SettingsPage = () => {
           <h2 className="page-title">Settings</h2>
           {activeTab === "sku" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
-              <div className="settings-section-head"><Package /><h3 className="settings-section-title">Family Configuration</h3></div>
+              <div className="settings-section-head"><Package /><h3 className="settings-section-title">Blend Configuration</h3></div>
               <Separator />
               <div className="settings-add-row">
                 <Input placeholder="New family name" value={newSku} onChange={(e) => setNewSku(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addSku()} />
