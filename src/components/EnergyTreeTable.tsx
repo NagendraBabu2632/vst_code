@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useCallback, useEffect } from "react";
-import { BarChart2, ChevronRight, LineChart, TrendingUp, X } from "lucide-react";
+import { ChevronRight, LineChart, TrendingUp, X } from "lucide-react";
 import * as d3 from "d3";
 import { useChartSize } from "@/components/charts/useChartSize";
 import "@/components/charts/tooltip.css";
@@ -92,7 +92,6 @@ function toDayValues(id: string, hourly: number[], n: number): number[] {
 
 // Inline trend chart shown when an asset is selected — D3-powered, responsive
 const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsset; slotLabels: string[]; onClose: () => void }) => {
-  const [chartType, setChartType] = useState<"line" | "bar">("line");
   const tooltipRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const { ref: chartWrapRef, width } = useChartSize<HTMLDivElement>(760);
@@ -112,7 +111,7 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
   const maxVal = useMemo(() => Math.max(...data), [data]);
   const avgVal = useMemo(() => +(data.reduce((s, v) => s + v, 0) / data.length).toFixed(1), [data]);
 
-  const { yScale, xLine, xBar, linePath, areaPath, yTicks } = useMemo(() => {
+  const { yScale, xLine, linePath, areaPath, yTicks } = useMemo(() => {
     const yScale = d3.scaleLinear()
       .domain([0, (d3.max(data) ?? 0) * 1.1 || 1])
       .nice()
@@ -120,7 +119,6 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
 
     const indices = data.map((_, i) => i);
     const xLine = d3.scalePoint<number>().domain(indices).range([0, innerW]);
-    const xBar = d3.scaleBand<number>().domain(indices).range([0, innerW]).padding(0.08);
 
     const lineGen = d3.line<number>()
       .x((_, i) => xLine(i) ?? 0)
@@ -136,7 +134,6 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
     return {
       yScale,
       xLine,
-      xBar,
       linePath: lineGen(data) ?? "",
       areaPath: areaGen(data) ?? "",
       yTicks: yScale.ticks(4),
@@ -172,21 +169,11 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
         <div className="energy-trend-controls">
           <button
             type="button"
-            className={`energy-trend-chart-btn${chartType === "line" ? " is-active" : ""}`}
-            onClick={() => setChartType("line")}
+            className="energy-trend-chart-btn is-active"
             aria-label="Line chart"
             title="Line chart"
           >
             <LineChart size={15} />
-          </button>
-          <button
-            type="button"
-            className={`energy-trend-chart-btn${chartType === "bar" ? " is-active" : ""}`}
-            onClick={() => setChartType("bar")}
-            aria-label="Histogram"
-            title="Histogram"
-          >
-            <BarChart2 size={15} />
           </button>
           <button type="button" className="energy-trend-close" onClick={onClose} aria-label="Close trend">
             <X size={14} />
@@ -216,49 +203,18 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
             })}
 
             {/* Line chart */}
-            {chartType === "line" && (
-              <>
-                <path d={areaPath} fill="url(#energyTrendFill)" />
-                <path d={linePath} fill="none" stroke="var(--primary)" strokeWidth={2} />
-                {data.map((v, i) => (
-                  <circle
-                    key={i}
-                    cx={xLine(i) ?? 0}
-                    cy={yScale(v)}
-                    r={3}
-                    fill="var(--primary)"
-                    className="energy-trend-data-point"
-                    onMouseMove={(e) => showTip(e, (slotLabels[i] ?? HOUR_LABELS[i] ?? String(i)), v)}
-                    onMouseLeave={hideTip}
-                  />
-                ))}
-              </>
-            )}
-
-            {/* Histogram / bar chart */}
-            {chartType === "bar" && data.map((v, i) => (
-              <rect
+            <path d={areaPath} fill="url(#energyTrendFill)" />
+            <path d={linePath} fill="none" stroke="var(--primary)" strokeWidth={2} />
+            {data.map((v, i) => (
+              <circle
                 key={i}
-                x={xBar(i) ?? 0}
-                y={yScale(v)}
-                width={xBar.bandwidth()}
-                height={innerH - yScale(v)}
+                cx={xLine(i) ?? 0}
+                cy={yScale(v)}
+                r={3}
                 fill="var(--primary)"
-                fillOpacity={0.22}
-                stroke="var(--primary)"
-                strokeOpacity={0.55}
-                strokeWidth={1}
                 className="energy-trend-data-point"
-                onMouseEnter={(e) => {
-                  (e.currentTarget as SVGRectElement).setAttribute("fill-opacity", "1");
-                  (e.currentTarget as SVGRectElement).setAttribute("stroke-opacity", "1");
-                  showTip(e, (slotLabels[i] ?? HOUR_LABELS[i] ?? String(i)), v);
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as SVGRectElement).setAttribute("fill-opacity", "0.22");
-                  (e.currentTarget as SVGRectElement).setAttribute("stroke-opacity", "0.55");
-                  hideTip();
-                }}
+                onMouseMove={(e) => showTip(e, (slotLabels[i] ?? HOUR_LABELS[i] ?? String(i)), v)}
+                onMouseLeave={hideTip}
               />
             ))}
 
@@ -272,9 +228,7 @@ const AssetTrendChart = ({ asset, slotLabels, onClose }: { asset: EnergyTreeAsse
               const step = Math.max(1, Math.ceil(slotLabels.length / maxVisible));
               return slotLabels.map((label, i) => {
                 if (i % step !== 0) return null;
-                const x = chartType === "line"
-                  ? (xLine(i) ?? 0)
-                  : (xBar(i) ?? 0) + xBar.bandwidth() / 2;
+                const x = xLine(i) ?? 0;
                 return (
                   <text key={i} x={x} y={innerH + 16} fontSize={10} textAnchor="middle" fill="var(--muted-foreground)">
                     {fmtLabel(label)}
@@ -305,6 +259,19 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const isIntraday = period === "today" || period === "yesterday";
   const [intradayMode, setIntradayMode] = useState<"hour" | "shift">("hour");
+
+  // Track drag vs. click — prevents row selection and sidebar hover during drags
+  const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const onMouseUp = () => document.body.classList.remove("table-dragging");
+    document.addEventListener("mouseup", onMouseUp);
+    return () => document.removeEventListener("mouseup", onMouseUp);
+  }, []);
+
+  const handleTableMouseDown = () => {
+    document.body.classList.add("table-dragging");
+  };
 
   const viewMode: ViewMode = isIntraday ? intradayMode : "day";
 
@@ -417,7 +384,7 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
       )}
 
       <div className="energy-tree-wrap">
-        <div className="energy-tree-scroll">
+        <div className="energy-tree-scroll" onMouseDown={handleTableMouseDown}>
           <table className="energy-tree-table">
             <thead>
               <tr>
@@ -442,7 +409,13 @@ const EnergyTreeTable = ({ period = "today" }: EnergyTreeTableProps) => {
                   <tr
                     key={row.id}
                     className={`energy-tree-row energy-tree-row--${row.kind}${isSelected ? " is-selected" : ""}`}
-                    onClick={() => row.kind === "asset" && setSelectedAssetId(row.id)}
+                    onMouseDown={(e) => { pointerDownPos.current = { x: e.clientX, y: e.clientY }; }}
+                    onClick={(e) => {
+                      if (!row.kind === "asset") return;
+                      const down = pointerDownPos.current;
+                      if (down && (Math.abs(e.clientX - down.x) > 5 || Math.abs(e.clientY - down.y) > 5)) return;
+                      if (row.kind === "asset") setSelectedAssetId(row.id);
+                    }}
                   >
                     <td className="energy-tree-td energy-tree-col-item">
                       <div className="energy-tree-item" style={{ "--tree-indent": `${row.depth * 18}px` } as React.CSSProperties}>

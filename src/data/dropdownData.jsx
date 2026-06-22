@@ -223,17 +223,6 @@ const DROPDOWN_DATA = {
         { value: "month", label: "Month" },
       ],
     },
-    week: {
-      id: "week", label: "Week", default: "W1",
-      note: "Visible only when period = Week",
-      options: [
-        { value: "W1", label: "W1" },
-        { value: "W2", label: "W2" },
-        { value: "W3", label: "W3" },
-        { value: "W4", label: "W4" },
-        { value: "W5", label: "W5" },
-      ],
-    },
     unit:      { id: "unit",      label: "Unit",      default: "all", options: "→ common.units" },
     line:      { id: "line",      label: "Line",      default: "all", options: "→ common.lines" },
     machine:   { id: "machine",   label: "Machine",   default: "all", options: "→ common.machines" },

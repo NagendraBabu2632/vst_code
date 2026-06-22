@@ -559,6 +559,13 @@
   background-color: var(--muted);
 }
 
+.select-item[data-disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+  color: var(--muted-foreground);
+}
+
 .select-item-indicator {
   position: absolute;
   right: 0.375rem;

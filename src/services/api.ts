@@ -8,7 +8,7 @@ import {
 } from "@/data/mockData";
 import { energyTree as energyTreeMock } from "@/data/energyTreeData";
 import type { EnergyTreeUnit, EnergyTreeLine, EnergyTreeAsset } from "@/data/energyTreeData";
-// import DROPDOWN_DATA from "../data/dropdownData";
+import DROPDOWN_DATA from "@/data/dropdownData";
 import PAGE_DATA from "@/data/pageData";
 import {
   EXEC_MOCK,
@@ -220,6 +220,16 @@ export const apiService = {
     if (monthsResult.status !== "fulfilled") console.warn("[Dropdowns] /dropdowns/months failed");
 
     return { ...DROPDOWN_DATA, common, weeks, months };
+  },
+
+  async fetchWeekOptions() {
+    const res = await execClient.get("/dropdowns/weeks");
+    return res.data as any[];
+  },
+
+  async fetchMonthOptions() {
+    const res = await execClient.get("/dropdowns/months");
+    return res.data as any[];
   },
 
   // ── Executive Summary — individual endpoint methods ──────────────────────

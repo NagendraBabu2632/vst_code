@@ -1,6 +1,6 @@
 import "./ExecutiveFilter.css";
 import { useState } from "react";
-import { format, addMonths, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { CalendarIcon, ChevronDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,7 +33,8 @@ export interface ExecFilterValue {
   shifts: string[];     // for day mode  (A/B/C/D)
   week: string;         // weekStartDate from API e.g. "2026-06-15"
   weekEnd: string;      // weekEndDate from API e.g. "2026-06-21"
-  month: string;        // yyyy-MM e.g. "2026-06"
+  month: string;        // monthStartDate from API e.g. "2026-06-01"
+  monthEnd: string;     // monthEndDate from API e.g. "2026-06-30"
 }
 
 interface Props {
@@ -55,17 +56,6 @@ const TABS: { value: ExecMode; label: string }[] = [
   { value: "week",  label: "Week"  },
   { value: "month", label: "Month" },
 ];
-
-// Static fallback months (last 12 months) used if API hasn't loaded yet
-const STATIC_MONTH_OPTIONS = (() => {
-  const out: { value: string; label: string }[] = [];
-  const base = new Date();
-  for (let i = -11; i <= 0; i++) {
-    const d = addMonths(base, i);
-    out.push({ value: format(d, "yyyy-MM"), label: format(d, "MMMM-yyyy") });
-  }
-  return out.reverse();
-})();
 
 /** Returns the shift id that is currently active based on wall-clock time. */
 function getCurrentShiftId(): string {
@@ -113,19 +103,26 @@ const ExecutiveFilter = ({ value, onChange, weeks = [], months = [] }: Props) =>
     setOpen(false);
   };
 
-  // ── Week dropdown options from API (most recent first) ──────────────
-  const weekOptions = weeks.map((w) => ({
-    value: w.weekStartDate,
-    label: `${w.week}  ·  ${format(parseISO(w.weekStartDate), "MMM d")}–${format(parseISO(w.weekEndDate), "MMM d, yyyy")}`,
-  }));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  // ── Month dropdown options from API (or static fallback) ────────────
-  const monthOptions = months.length
-    ? months.map((m) => ({
-        value: format(parseISO(m.monthStartDate), "yyyy-MM"),
-        label: `${m.month}-${m.year}`,
-      }))
-    : STATIC_MONTH_OPTIONS;
+  // ── Week dropdown options from API — ascending order (W1 at top) ────
+  const weekOptions = [...weeks]
+    .sort((a, b) => a.weekStartDate.localeCompare(b.weekStartDate))
+    .map((w) => ({
+      value: w.weekStartDate,
+      label: `${w.week}  ·  ${format(parseISO(w.weekStartDate), "MMM d")}–${format(parseISO(w.weekEndDate), "MMM d, yyyy")}`,
+      disabled: parseISO(w.weekStartDate) > today,
+    }));
+
+  // ── Month dropdown options from API — ascending order ───────────────
+  const monthOptions = [...months]
+    .sort((a, b) => a.monthStartDate.localeCompare(b.monthStartDate))
+    .map((m) => ({
+      value: m.monthStartDate,
+      label: `${m.month} ${m.year}`,
+      disabled: parseISO(m.monthStartDate) > today,
+    }));
 
   const renderDayTrigger = () => {
     const shiftLabel =
@@ -239,9 +236,12 @@ const ExecutiveFilter = ({ value, onChange, weeks = [], months = [] }: Props) =>
         {value.mode === "month" && (
           <Dropdown
             value={value.month}
-            onValueChange={(v) => onChange({ ...value, month: v })}
-            placeholder="Select month"
-            triggerClassName="w-[200px]"
+            onValueChange={(v) => {
+              const sel = months.find((m) => m.monthStartDate === v);
+              onChange({ ...value, month: v, monthEnd: sel?.monthEndDate ?? "" });
+            }}
+            placeholder={months.length ? "Select month" : "Loading months…"}
+            triggerClassName="exec-filter__week-dropdown"
             options={monthOptions}
           />
         )}

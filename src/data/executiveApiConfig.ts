@@ -34,9 +34,11 @@ export const buildExecParams = (payload: ExecPayload): Record<string, any> => {
         .map((s) => SHIFT_NUMBER[s] ?? s)
         .join('');
     }
+  } else if (payload.dateFilter === "week") {
+    params.shift_detail = 5;
   } else {
-    // Week / month mode: always send 4 (all shifts + summary)
-    params.shift_detail = 4;
+    // month mode
+    params.shift_detail = 6;
   }
   return params;
 };

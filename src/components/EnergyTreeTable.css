@@ -175,7 +175,12 @@
 }
 
 /* Hierarchy row colors */
-.energy-tree-row { cursor: default; transition: background-color 0.12s; }
+.energy-tree-row {
+  cursor: default;
+  transition: background-color 0.12s;
+  -webkit-user-select: none;
+  user-select: none;
+}
 
 .energy-tree-row--unit .energy-tree-td {
   background: color-mix(in oklab, var(--primary) 8%, var(--card));

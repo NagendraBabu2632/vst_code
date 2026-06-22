@@ -1,5 +1,5 @@
 import "./DashboardLayout.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bell, Settings, ChevronRight } from "lucide-react";
 import AppSidebar from "@/components/AppSidebar/AppSidebar";
@@ -26,11 +26,17 @@ const SETTINGS_TABS = [
   { value: "alerts", label: "Alert Configurator" },
 ];
 
-const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const theme = useAppSelector((s) => s.theme.theme);
   const logo = theme === "dark" ? darkLogo : lightLogo;
+
+  useEffect(() => {
+    const onMouseUp = () => document.body.classList.remove("main-dragging");
+    document.addEventListener("mouseup", onMouseUp);
+    return () => document.removeEventListener("mouseup", onMouseUp);
+  }, []);
 
   return (
     <div className="layout">
@@ -101,7 +107,12 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
 
       <AppSidebar />
 
-      <main className="layout__main">{children}</main>
+      <main
+        className="layout__main"
+        onMouseDown={() => document.body.classList.add("main-dragging")}
+      >
+        {children}
+      </main>
     </div>
   );
 };

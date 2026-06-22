@@ -11,7 +11,7 @@ import "./Dropdown.css";
 
 export type DropdownOption =
   | string
-  | { value: string; label?: ReactNode };
+  | { value: string; label?: ReactNode; disabled?: boolean };
 
 export interface DropdownProps {
   value?: string;
@@ -55,10 +55,10 @@ const Dropdown = ({
         {children ??
           options?.map((opt) => {
             const v = typeof opt === "string" ? opt : opt.value;
-            const l =
-              typeof opt === "string" ? opt : (opt.label ?? opt.value);
+            const l = typeof opt === "string" ? opt : (opt.label ?? opt.value);
+            const d = typeof opt === "string" ? false : (opt.disabled ?? false);
             return (
-              <SelectItem key={v} value={v}>
+              <SelectItem key={v} value={v} disabled={d}>
                 {l}
               </SelectItem>
             );

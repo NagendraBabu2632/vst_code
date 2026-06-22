@@ -18,7 +18,7 @@ interface EnergyTrendAreaChartProps {
 }
 
 const HEIGHT = 300;
-const MARGIN = { top: 10, right: 20, bottom: 36, left: 50 };
+const MARGIN = { top: 10, right: 20, bottom: 72, left: 70 };
 
 export const EnergyTrendAreaChart = ({ data }: EnergyTrendAreaChartProps) => {
   const { ref, width } = useChartSize(800);
@@ -52,8 +52,11 @@ export const EnergyTrendAreaChart = ({ data }: EnergyTrendAreaChartProps) => {
     [x, y]
   );
 
-  const xTicks = data.filter((_, i) => i % Math.max(1, Math.floor(data.length / 8)) === 0);
-  const yTicks = y.ticks(5);
+  const estLabelPx = Math.max(...data.map((d) => d.time.length)) * 7 + 8;
+  const maxTicks   = Math.max(2, Math.floor(innerW / estLabelPx));
+  const tickStep   = Math.max(1, Math.ceil(data.length / maxTicks));
+  const xTicks     = data.filter((_, i) => i % tickStep === 0);
+  const yTicks     = y.ticks(5);
 
   const showTip = useCallback((e: React.MouseEvent, d: EnergyTrendPoint) => {
     const tt = tooltipRef.current;
@@ -109,11 +112,19 @@ export const EnergyTrendAreaChart = ({ data }: EnergyTrendAreaChartProps) => {
             <line x1={0} x2={innerW} stroke={axisStroke} />
             {xTicks.map((d) => (
               <g key={d.time} transform={`translate(${x(d.time) ?? 0},0)`}>
-                <line y2={4} stroke={axisStroke} />
-                <text y={16} textAnchor="middle" fontSize={11} fill={axisStroke}>{d.time}</text>
+                <line y2={6} stroke={axisStroke} strokeWidth={1.5} />
+                <text
+                  y={18}
+                  textAnchor="end"
+                  fontSize={11}
+                  fill={axisStroke}
+                  transform="rotate(-40)"
+                >
+                  {d.time}
+                </text>
               </g>
             ))}
-            <text x={innerW / 2} y={32} textAnchor="middle" fontSize={11} fill={axisStroke}>Date-Time</text>
+            <text x={innerW / 2} y={60} textAnchor="middle" fontSize={11} fill={axisStroke}>Date-Time</text>
           </g>
           {/* Y axis */}
           <line y1={0} y2={innerH} stroke={axisStroke} />
@@ -123,7 +134,7 @@ export const EnergyTrendAreaChart = ({ data }: EnergyTrendAreaChartProps) => {
               <text x={-8} dy={4} textAnchor="end" fontSize={11} fill={axisStroke}>{t}</text>
             </g>
           ))}
-          <text transform={`translate(-38,${innerH / 2}) rotate(-90)`} textAnchor="middle" fontSize={11} fill={axisStroke}>kWh</text>
+          <text transform={`translate(-58,${innerH / 2}) rotate(-90)`} textAnchor="middle" fontSize={11} fill={axisStroke}>kWh</text>
           {/* Legend */}
           <g transform={`translate(${innerW - 80},${-2})`}>
             <rect width={10} height={10} fill="hsl(210, 100%, 50%)" />

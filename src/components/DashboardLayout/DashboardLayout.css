@@ -179,10 +179,12 @@
 }
 
 /* Main content area — offset for fixed header (top) and collapsed sidebar (left).
-   The sibling rule below shifts it right when the sidebar expands on hover. */
+   The sibling rule below shifts it right when the sidebar expands on hover.
+   width + margin-left = 100vw always, so the right edge never moves. */
 .layout__main {
   margin-top: 3.5rem;
   margin-left: 56px;
+  width: calc(100vw - 56px);
   height: calc(100vh - 3.5rem);
   overflow-y: auto;
   overflow-x: hidden;
@@ -191,12 +193,29 @@
   flex-direction: column;
   gap: 1.5rem;
   background-color: var(--background);
-  transition: margin-left 0.25s ease;
+  transition: margin-left 0.25s ease, width 0.25s ease;
+  box-sizing: border-box;
 }
 
 /* Push main content right when the sidebar expands (hover) */
 .sidebar:hover ~ .layout__main {
   margin-left: 220px;
+  width: calc(100vw - 220px);
+}
+
+/* While the user is dragging anywhere on the main content (or inside the table),
+   freeze the sidebar and suppress the margin transition so no layout shift appears. */
+body.main-dragging .sidebar,
+body.table-dragging .sidebar {
+  width: 56px !important;
+  pointer-events: none;
+}
+
+body.main-dragging .layout__main,
+body.table-dragging .layout__main {
+  margin-left: 56px !important;
+  width: calc(100vw - 56px) !important;
+  transition: none !important;
 }
 
 @media (min-width: 768px) {

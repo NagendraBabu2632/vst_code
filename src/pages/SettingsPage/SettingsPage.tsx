@@ -46,6 +46,7 @@ const SettingsPage = () => {
   const [editBlendName, setEditBlendName] = useState("");
   const [editBlendFamilyId, setEditBlendFamilyId] = useState("");
   const [editBlendDescription, setEditBlendDescription] = useState("");
+  const [editBlendStatus, setEditBlendStatus] = useState<"Active" | "Inactive">("Active");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const blendFileInputRef = useRef<HTMLInputElement>(null);
   const prodFileInputRef = useRef<HTMLInputElement>(null);
@@ -194,6 +195,7 @@ const SettingsPage = () => {
     setEditBlendName(blend.blendName);
     setEditBlendFamilyId(String(blend.familyId));
     setEditBlendDescription(blend.blendDescription ?? "");
+    setEditBlendStatus("Active");
   };
 
   const handleSaveEdit = async () => {
@@ -202,8 +204,13 @@ const SettingsPage = () => {
     if (!name) { toast.error("Blend name is required"); return; }
     if (!editBlendFamilyId) { toast.error("Please select a family"); return; }
     try {
-      await apiService.upsertBlend({ action: 2, blendId: editingBlendId, blendName: name, blendDescription: editBlendDescription.trim() || null, familyId: Number(editBlendFamilyId) });
-      toast.success("Blend updated");
+      if (editBlendStatus === "Inactive") {
+        await apiService.upsertBlend({ action: 3, blendId: editingBlendId });
+        toast.info("Blend deactivated");
+      } else {
+        await apiService.upsertBlend({ action: 2, blendId: editingBlendId, blendName: name, blendDescription: editBlendDescription.trim() || null, familyId: Number(editBlendFamilyId) });
+        toast.success("Blend updated");
+      }
       setEditingBlendId(null);
       await loadBlends();
     } catch {
@@ -362,7 +369,16 @@ const SettingsPage = () => {
                               />
                             </td>
                             <td><Input value={editBlendDescription} onChange={(e) => setEditBlendDescription(e.target.value)} /></td>
-                            <td><Badge variant="outline" className="settings-badge-offpeak settings-badge-sm">Active</Badge></td>
+                            <td>
+                              <Dropdown
+                                value={editBlendStatus}
+                                onValueChange={(v) => setEditBlendStatus(v as "Active" | "Inactive")}
+                                options={[
+                                  { value: "Active", label: "Active" },
+                                  { value: "Inactive", label: "Inactive" },
+                                ]}
+                              />
+                            </td>
                             <td>
                               <div className="settings-actions-cell">
                                 <Button size="sm" variant="outline" onClick={handleSaveEdit}>Save</Button>

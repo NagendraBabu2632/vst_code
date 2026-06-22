@@ -5,7 +5,7 @@ import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import KpiCard from "@/components/KpiCard/KpiCard";
 import ExecutiveFilter, { type ExecFilterValue, type WeekOption, type MonthOption } from "@/components/ExecutiveFilter";
 import Loader from "@/components/Loader/Loader";
-import { format, addDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { format, addDays } from "date-fns";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
 import {
   fetchExecutiveSummaryData,
@@ -18,7 +18,7 @@ import {
 } from "@/redux/slices/executiveSummarySlice";
 import { fetchAlertsData, selectAlerts } from "@/redux/slices/alertsSlice";
 import type { ExecApiPayload } from "@/redux/slices/dropdownSlice";
-import { selectDropdownData } from "@/redux/slices/dropdownSlice";
+import { apiService } from "@/services/api";
 import {
   Zap, IndianRupee, Gauge, Droplets, Wind,
   Trophy, TrendingDown, BarChart3, Table2, Factory, Bell,
@@ -54,16 +54,14 @@ const buildExecApiPayload = (filter: ExecFilterValue): ExecApiPayload => {
     };
   }
   if (filter.mode === "week") {
-    // Use API-provided dates directly; fall back to today if not yet loaded
     const from = filter.week    || fmtDate(new Date());
     const to   = filter.weekEnd || fmtDate(addDays(new Date(), 6));
     return { dateRange: { from, to }, dateFilter: "week" };
   }
-  const monthDate = parseISO(filter.month + "-01");
-  return {
-    dateRange: { from: format(startOfMonth(monthDate), "yyyy-MM-dd"), to: format(endOfMonth(monthDate), "yyyy-MM-dd") },
-    dateFilter: "month",
-  };
+  // month mode — use API-provided dates directly
+  const from = filter.month    || fmtDate(new Date());
+  const to   = filter.monthEnd || fmtDate(new Date());
+  return { dateRange: { from, to }, dateFilter: "month" };
 };
 
 type Top5Mode = "consumption" | "cost";
@@ -80,10 +78,9 @@ const ExecutiveSummary = () => {
   const trendData    = useAppSelector(selectTrendData);
   const top5Data     = useAppSelector(selectTop5Data);
   const alerts       = useAppSelector(selectAlerts);
-  const dropdownData = useAppSelector(selectDropdownData);
 
-  const weeksData  = (dropdownData?.weeks  ?? []) as WeekOption[];
-  const monthsData = (dropdownData?.months ?? []) as MonthOption[];
+  const [weeksData,  setWeeksData]  = useState<WeekOption[]>([]);
+  const [monthsData, setMonthsData] = useState<MonthOption[]>([]);
 
   const [execFilter, setExecFilter] = useState<ExecFilterValue>({
     mode: "day",
@@ -91,29 +88,36 @@ const ExecutiveSummary = () => {
     shifts: ["A"],
     week: "",
     weekEnd: "",
-    month: format(new Date(), "yyyy-MM"),
+    month: "",
+    monthEnd: "",
   });
 
-  // Once the weeks API data arrives, default to the current ISO week
+  // Fetch weeks and months directly on mount
   useEffect(() => {
-    if (!weeksData.length) return;
-    const currentWeek = weeksData.find((w) => w.isCurrent);
-    if (currentWeek) {
-      setExecFilter((prev) => ({
-        ...prev,
-        week:    currentWeek.weekStartDate,
-        weekEnd: currentWeek.weekEndDate,
-      }));
-    }
+    apiService.fetchWeekOptions().then((data) => {
+      setWeeksData(data);
+      const current = data.find((w: WeekOption) => w.isCurrent);
+      if (current) {
+        setExecFilter((prev) => ({ ...prev, week: current.weekStartDate, weekEnd: current.weekEndDate }));
+      }
+    }).catch(() => {});
+
+    apiService.fetchMonthOptions().then((data) => {
+      setMonthsData(data);
+      const current = data.find((m: MonthOption) => m.isCurrent);
+      if (current) {
+        setExecFilter((prev) => ({ ...prev, month: current.monthStartDate, monthEnd: current.monthEndDate }));
+      }
+    }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeksData.length]);
+  }, []);
   const [top5Mode, setTop5Mode] = useState<Top5Mode>("consumption");
   const [top5View, setTop5View] = useState<Top5View>("chart");
 
   useEffect(() => {
     dispatch(fetchExecutiveSummaryData(buildExecApiPayload(execFilter)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, execFilter.mode, execFilter.date.getTime(), execFilter.week, execFilter.weekEnd, execFilter.month, execFilter.shifts.join(",")]);
+  }, [dispatch, execFilter.mode, execFilter.date.getTime(), execFilter.week, execFilter.weekEnd, execFilter.month, execFilter.monthEnd, execFilter.shifts.join(",")]);
 
   useEffect(() => {
     dispatch(fetchAlertsData());
