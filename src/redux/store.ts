@@ -8,6 +8,7 @@ import energyMonitoringReducer from "./slices/energyMonitoringSlice";
 import processAnalysisReducer from "./slices/processAnalysisSlice";
 import alertsReducer from "./slices/alertsSlice";
 import reportsReducer from "./slices/reportsSlice";
+import userManagementReducer from "./slices/userManagementSlice";
 
 export const store = configureStore({
   reducer: {
@@ -20,6 +21,7 @@ export const store = configureStore({
     processAnalysis: processAnalysisReducer,
     alerts: alertsReducer,
     reports: reportsReducer,
+    userManagement: userManagementReducer,
   },
 });
 

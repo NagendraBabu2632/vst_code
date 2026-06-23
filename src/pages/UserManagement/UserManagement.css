@@ -1,0 +1,335 @@
+.um-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.um-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.um-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--foreground);
+  margin: 0;
+}
+
+.um-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.um-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.um-search-icon {
+  position: absolute;
+  left: 0.6rem;
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.um-search {
+  padding-left: 2rem;
+  height: 36px;
+  width: 220px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  background: var(--card);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.um-search::placeholder {
+  color: var(--muted-foreground);
+}
+
+.um-search:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 20%, transparent);
+}
+
+.um-btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.85rem;
+  height: 36px;
+  border-radius: var(--radius);
+  border: none;
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.um-btn-add:hover {
+  opacity: 0.88;
+}
+
+/* Table card */
+.um-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: var(--shadow-glow);
+}
+
+.um-table-wrap {
+  overflow-x: auto;
+}
+
+.um-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  min-width: 900px;
+}
+
+.um-table thead tr {
+  background-color: var(--muted);
+  border-bottom: 2px solid var(--primary);
+}
+
+.um-table th {
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  color: var(--muted-foreground);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.um-table td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+  vertical-align: middle;
+}
+
+.um-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.um-table tbody tr:hover {
+  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+
+/* Badges */
+.um-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.um-badge--admin {
+  background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+  color: var(--primary);
+  border: 1px solid color-mix(in oklab, var(--primary) 30%, transparent);
+}
+
+.um-badge--operator {
+  background-color: color-mix(in oklab, var(--warning) 12%, transparent);
+  color: var(--warning);
+  border: 1px solid color-mix(in oklab, var(--warning) 30%, transparent);
+}
+
+.um-badge--yes {
+  background-color: color-mix(in oklab, var(--success) 12%, transparent);
+  color: var(--success);
+  border: 1px solid color-mix(in oklab, var(--success) 30%, transparent);
+}
+
+.um-badge--no {
+  background-color: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  border: 1px solid color-mix(in oklab, var(--destructive) 30%, transparent);
+}
+
+/* Action buttons */
+.um-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.um-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  color: var(--muted-foreground);
+}
+
+.um-icon-btn:hover {
+  background: var(--muted);
+}
+
+.um-icon-btn--edit:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.um-icon-btn--delete:hover {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
+
+/* Pagination */
+.um-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.um-page-btns {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.um-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--foreground);
+  transition: background 0.12s;
+}
+
+.um-page-btn:hover:not(:disabled) {
+  background: var(--muted);
+}
+
+.um-page-btn--active {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+.um-page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Empty state */
+.um-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+}
+
+/* Modal form */
+.um-form-grid {
+  display: grid;
+  gap: 1rem;
+  padding: 0.25rem 0;
+}
+
+.um-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.um-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.um-input {
+  height: 36px;
+  padding: 0 0.65rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  background: var(--card);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.um-input::placeholder {
+  color: var(--muted-foreground);
+}
+
+.um-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 20%, transparent);
+}
+
+.um-input:disabled {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  cursor: default;
+}
+
+.um-select {
+  height: 36px;
+  padding: 0 0.65rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  background: var(--card);
+  color: var(--foreground);
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.um-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 20%, transparent);
+}
+
+/* Delete confirm */
+.um-delete-msg {
+  font-size: 0.9rem;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
+.um-delete-name {
+  font-weight: 600;
+  color: var(--foreground);
+}

@@ -11,6 +11,7 @@ const ReportsPage = lazy(() => import("@/pages/ReportsPage/ReportsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage/SettingsPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage/LoginPage"));
 const NotFound = lazy(() => import("@/pages/NotFound/NotFound"));
+const UserManagement = lazy(() => import("@/pages/UserManagement/UserManagement"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
@@ -70,6 +71,14 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/user-management"
+        element={
+          <ProtectedRoute>
+            <UserManagement />
           </ProtectedRoute>
         }
       />
