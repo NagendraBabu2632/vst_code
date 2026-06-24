@@ -142,7 +142,7 @@
   font-weight: 500;
 }
 
-.um-badge--admin {
+.um-badge--manager {
   background-color: color-mix(in oklab, var(--primary) 12%, transparent);
   color: var(--primary);
   border: 1px solid color-mix(in oklab, var(--primary) 30%, transparent);

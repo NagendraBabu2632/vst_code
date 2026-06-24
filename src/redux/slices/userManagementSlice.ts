@@ -3,9 +3,9 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 export interface User {
   UserId: number;
   UserName: string;
-  FirstName: string;
-  LastName: string;
-  RoleType: "Admin" | "Operator";
+  UserMailId: string;
+  Designation: string;
+  RoleType: "Manager" | "Operator";
   Active: "Yes" | "No";
   creationDateUTC: string;
   modifiedDateUTC: string;
@@ -17,10 +17,56 @@ interface UserManagementState {
 }
 
 const staticUsers: User[] = [
-  { UserId: 1017, UserName: "dsfsd", FirstName: "sdfsd", LastName: "sdfwefsd", RoleType: "Operator", Active: "Yes", creationDateUTC: "Sep 13, 2024", modifiedDateUTC: "Sep 13, 2024" },
-  { UserId: 1027, UserName: "kesava", FirstName: "nagendra", LastName: "babu", RoleType: "Admin", Active: "Yes", creationDateUTC: "Sep 16, 2024", modifiedDateUTC: "Sep 23, 2024" },
-  { UserId: 1035, UserName: "kesavsri", FirstName: "kk", LastName: "sri", RoleType: "Admin", Active: "Yes", creationDateUTC: "Sep 16, 2024", modifiedDateUTC: "Sep 23, 2024" },
-  { UserId: 1066, UserName: "nagendra.kolli@carbynetech.com", FirstName: "Nagendra", LastName: "Kolli", RoleType: "Admin", Active: "Yes", creationDateUTC: "Sep 23, 2024", modifiedDateUTC: "Sep 27, 2024" },
+  {
+    UserId: 1071,
+    UserName: "Ravi Kumar",
+    UserMailId: "ravi@vst.com",
+    Designation: "Energy Manager",
+    RoleType: "Manager",
+    Active: "Yes",
+    creationDateUTC: "Jun 23, 2026",
+    modifiedDateUTC: "Jun 23, 2026"
+  },
+  {
+    UserId: 1072,
+    UserName: "Anita Sharma",
+    UserMailId: "anita@vst.com",
+    Designation: "Operator",
+    RoleType: "Operator",
+    Active: "Yes",
+    creationDateUTC: "Jun 23, 2026",
+    modifiedDateUTC: "Jun 23, 2026"
+  },
+  {
+    UserId: 1073,
+    UserName: "S RANGA RAO",
+    UserMailId: "rangarao@vstind.com",
+    Designation: "DGM",
+    RoleType: "Manager",
+    Active: "Yes",
+    creationDateUTC: "Jun 23, 2026",
+    modifiedDateUTC: "Jun 23, 2026"
+  },
+  {
+    UserId: 1074,
+    UserName: "CH SAMBAIAH",
+    UserMailId: "sambaiah@vstind.com",
+    Designation: "Deputy Electrical Manager",
+    RoleType: "Manager",
+    Active: "Yes",
+    creationDateUTC: "Jun 23, 2026",
+    modifiedDateUTC: "Jun 23, 2026"
+  },
+  {
+    UserId: 1075,
+    UserName: "A JAYA SRINVASU",
+    UserMailId: "ajsrinivasu@vstind.com",
+    Designation: "Deputy Electrical Manager",
+    RoleType: "Manager",
+    Active: "Yes",
+    creationDateUTC: "Jun 23, 2026",
+    modifiedDateUTC: "Jun 23, 2026"
+  }
 ];
 
 const initialState: UserManagementState = {
@@ -41,11 +87,12 @@ const userManagementSlice = createSlice({
         modifiedDateUTC: now,
       });
     },
-    updateUser(state, action: PayloadAction<Pick<User, "UserId" | "FirstName" | "LastName" | "RoleType" | "Active">>) {
+    updateUser(state, action: PayloadAction<Pick<User, "UserId" | "UserName" | "UserMailId" | "Designation" | "RoleType" | "Active">>) {
       const user = state.users.find((u) => u.UserId === action.payload.UserId);
       if (user) {
-        user.FirstName = action.payload.FirstName;
-        user.LastName = action.payload.LastName;
+        user.UserName = action.payload.UserName;
+        user.UserMailId = action.payload.UserMailId;
+        user.Designation = action.payload.Designation;
         user.RoleType = action.payload.RoleType;
         user.Active = action.payload.Active;
         user.modifiedDateUTC = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

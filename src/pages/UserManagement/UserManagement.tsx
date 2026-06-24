@@ -26,16 +26,16 @@ type ModalMode = "add" | "edit" | null;
 
 interface UserForm {
   UserName: string;
-  FirstName: string;
-  LastName: string;
-  RoleType: "Admin" | "Operator";
+  UserMailId: string;
+  Designation: string;
+  RoleType: "Manager" | "Operator";
   Active: "Yes" | "No";
 }
 
 const emptyForm = (): UserForm => ({
   UserName: "",
-  FirstName: "",
-  LastName: "",
+  UserMailId: "",
+  Designation: "",
   RoleType: "Operator",
   Active: "Yes",
 });
@@ -58,8 +58,7 @@ const UserManagement = () => {
       (u) =>
         String(u.UserId).includes(q) ||
         u.UserName.toLowerCase().includes(q) ||
-        u.FirstName.toLowerCase().includes(q) ||
-        u.LastName.toLowerCase().includes(q) ||
+        u.UserMailId.toLowerCase().includes(q) ||
         u.RoleType.toLowerCase().includes(q)
     );
   }, [users, search]);
@@ -82,8 +81,8 @@ const UserManagement = () => {
   const openEdit = (user: User) => {
     setForm({
       UserName: user.UserName,
-      FirstName: user.FirstName,
-      LastName: user.LastName,
+      UserMailId: user.UserMailId,
+      Designation: user.Designation,
       RoleType: user.RoleType,
       Active: user.Active,
     });
@@ -97,11 +96,24 @@ const UserManagement = () => {
   };
 
   const handleSave = () => {
-    if (!form.UserName.trim() || !form.FirstName.trim() || !form.LastName.trim()) return;
+    if (!form.UserName.trim() || !form.UserMailId.trim()) return;
     if (modalMode === "add") {
-      dispatch(addUser({ UserName: form.UserName.trim(), FirstName: form.FirstName.trim(), LastName: form.LastName.trim(), RoleType: form.RoleType, Active: form.Active }));
+      dispatch(addUser({
+        UserName: form.UserName.trim(),
+        UserMailId: form.UserMailId.trim(),
+        Designation: form.Designation.trim(),
+        RoleType: form.RoleType,
+        Active: form.Active,
+      }));
     } else if (modalMode === "edit" && editingUser) {
-      dispatch(updateUser({ UserId: editingUser.UserId, FirstName: form.FirstName.trim(), LastName: form.LastName.trim(), RoleType: form.RoleType, Active: form.Active }));
+      dispatch(updateUser({
+        UserId: editingUser.UserId,
+        UserName: form.UserName.trim(),
+        UserMailId: form.UserMailId.trim(),
+        Designation: form.Designation.trim(),
+        RoleType: form.RoleType,
+        Active: form.Active,
+      }));
     }
     closeModal();
   };
@@ -116,7 +128,7 @@ const UserManagement = () => {
   const field = (key: keyof UserForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
-  const isFormValid = form.UserName.trim() && form.FirstName.trim() && form.LastName.trim();
+  const isFormValid = form.UserName.trim() && form.UserMailId.trim();
 
   return (
     <DashboardLayout>
@@ -138,7 +150,7 @@ const UserManagement = () => {
               />
             </div>
             <button type="button" className="um-btn-add" onClick={openAdd}>
-              <UserPlus size={15} />
+              <UserPlus size={15} aria-hidden="true" />
               Add New User
             </button>
           </div>
@@ -152,8 +164,8 @@ const UserManagement = () => {
                 <tr>
                   <th>User ID</th>
                   <th>Username</th>
-                  <th>First Name</th>
-                  <th>Last Name</th>
+                  <th>User Mail ID</th>
+                  <th>Designation</th>
                   <th>Role</th>
                   <th>Active</th>
                   <th>Creation Date</th>
@@ -165,7 +177,7 @@ const UserManagement = () => {
                 {pageRows.length === 0 ? (
                   <tr>
                     <td colSpan={9}>
-                      <div className="um-empty">No users found</div>
+                      <div className="um-empty">No users found.</div>
                     </td>
                   </tr>
                 ) : (
@@ -173,10 +185,10 @@ const UserManagement = () => {
                     <tr key={user.UserId}>
                       <td>{user.UserId}</td>
                       <td>{user.UserName}</td>
-                      <td>{user.FirstName}</td>
-                      <td>{user.LastName}</td>
+                      <td>{user.UserMailId}</td>
+                      <td>{user.Designation}</td>
                       <td>
-                        <span className={`um-badge ${user.RoleType === "Admin" ? "um-badge--admin" : "um-badge--operator"}`}>
+                        <span className={`um-badge ${user.RoleType === "Manager" ? "um-badge--manager" : "um-badge--operator"}`}>
                           {user.RoleType}
                         </span>
                       </td>
@@ -189,10 +201,20 @@ const UserManagement = () => {
                       <td>{user.modifiedDateUTC}</td>
                       <td>
                         <div className="um-actions">
-                          <button type="button" className="um-icon-btn um-icon-btn--edit" aria-label={`Edit ${user.FirstName} ${user.LastName}`} onClick={() => openEdit(user)}>
+                          <button
+                            type="button"
+                            className="um-icon-btn um-icon-btn--edit"
+                            aria-label={`Edit ${user.UserName}`}
+                            onClick={() => openEdit(user)}
+                          >
                             <Pencil size={13} aria-hidden="true" />
                           </button>
-                          <button type="button" className="um-icon-btn um-icon-btn--delete" aria-label={`Delete ${user.FirstName} ${user.LastName}`} onClick={() => setDeleteTarget(user)}>
+                          <button
+                            type="button"
+                            className="um-icon-btn um-icon-btn--delete"
+                            aria-label={`Delete ${user.UserName}`}
+                            onClick={() => setDeleteTarget(user)}
+                          >
                             <Trash2 size={13} aria-hidden="true" />
                           </button>
                         </div>
@@ -210,7 +232,13 @@ const UserManagement = () => {
               Showing {filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length} users
             </span>
             <div className="um-page-btns">
-              <button type="button" className="um-page-btn" aria-label="Previous page" disabled={safePage === 1} onClick={() => setPage(safePage - 1)}>
+              <button
+                type="button"
+                className="um-page-btn"
+                aria-label="Previous page"
+                disabled={safePage === 1}
+                onClick={() => setPage(safePage - 1)}
+              >
                 <ChevronLeft size={13} aria-hidden="true" />
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
@@ -225,7 +253,13 @@ const UserManagement = () => {
                   {p}
                 </button>
               ))}
-              <button type="button" className="um-page-btn" aria-label="Next page" disabled={safePage === totalPages} onClick={() => setPage(safePage + 1)}>
+              <button
+                type="button"
+                className="um-page-btn"
+                aria-label="Next page"
+                disabled={safePage === totalPages}
+                onClick={() => setPage(safePage + 1)}
+              >
                 <ChevronRight size={13} aria-hidden="true" />
               </button>
             </div>
@@ -249,42 +283,41 @@ const UserManagement = () => {
                 <input id="um-user-id" className="um-input" value={editingUser.UserId} disabled aria-disabled="true" />
               </div>
             )}
-            {modalMode === "add" && (
-              <div className="um-field">
-                <label htmlFor="um-username" className="um-label">Email / Username *</label>
-                <input
-                  id="um-username"
-                  className="um-input"
-                  placeholder="e.g. user@example.com"
-                  value={form.UserName}
-                  onChange={field("UserName")}
-                />
-              </div>
-            )}
             <div className="um-field">
-              <label htmlFor="um-firstname" className="um-label">First Name *</label>
+              <label htmlFor="um-username" className="um-label">Username *</label>
               <input
-                id="um-firstname"
+                id="um-username"
                 className="um-input"
-                placeholder="Enter first name"
-                value={form.FirstName}
-                onChange={field("FirstName")}
+                placeholder="Enter username"
+                value={form.UserName}
+                onChange={field("UserName")}
               />
             </div>
             <div className="um-field">
-              <label htmlFor="um-lastname" className="um-label">Last Name *</label>
+              <label htmlFor="um-mailid" className="um-label">User Mail ID *</label>
               <input
-                id="um-lastname"
+                id="um-mailid"
                 className="um-input"
-                placeholder="Enter last name"
-                value={form.LastName}
-                onChange={field("LastName")}
+                type="email"
+                placeholder="e.g. user@example.com"
+                value={form.UserMailId}
+                onChange={field("UserMailId")}
+              />
+            </div>
+            <div className="um-field">
+              <label htmlFor="um-designation" className="um-label">Designation</label>
+              <input
+                id="um-designation"
+                className="um-input"
+                placeholder="e.g. Energy Manager"
+                value={form.Designation}
+                onChange={field("Designation")}
               />
             </div>
             <div className="um-field">
               <label htmlFor="um-role" className="um-label">Role</label>
               <select id="um-role" className="um-select" value={form.RoleType} onChange={field("RoleType")}>
-                <option value="Admin">Admin</option>
+                <option value="Manager">Manager</option>
                 <option value="Operator">Operator</option>
               </select>
             </div>
@@ -316,8 +349,8 @@ const UserManagement = () => {
           </DialogHeader>
           <p className="um-delete-msg">
             Are you sure you want to delete user{" "}
-            <span className="um-delete-name">{deleteTarget?.FirstName} {deleteTarget?.LastName}</span>{" "}
-            (<span className="um-delete-name">{deleteTarget?.UserName}</span>)?
+            <span className="um-delete-name">{deleteTarget?.UserName}</span>{" "}
+            (<span className="um-delete-name">{deleteTarget?.UserMailId}</span>)?
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
