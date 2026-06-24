@@ -328,19 +328,23 @@ export const apiService = {
 
   // ── Process Analysis — download ──────────────────────────────────────────
   async downloadProcessAnalysisData(payload?: ProcessApiPayload) {
-    const now   = new Date();
-    const today = now.toISOString().slice(0, 10);
-    // Always use date-only strings for the download endpoint
-    const toDateStr = (s: string) => s.slice(0, 10);
+    const now         = new Date();
+    const defaultFrom = new Date(now.getTime() - 29 * 86400000).toISOString().slice(0, 10);
+    const defaultTo   = now.toISOString().slice(0, 10);
 
-    const fromStr = payload?.dateRange?.from ? toDateStr(payload.dateRange.from) : new Date(now.getTime() - 29 * 86400000).toISOString().slice(0, 10);
-    const toStr   = payload?.dateRange?.to   ? toDateStr(payload.dateRange.to)   : today;
+    const toEpochFrom = (s: string): number =>
+      new Date(s.includes(" ") ? s.replace(" ", "T") : `${s}T00:00:00`).getTime();
+    const toEpochTo   = (s: string): number =>
+      new Date(s.includes(" ") ? s.replace(" ", "T") : `${s}T23:59:59`).getTime();
+
+    const fromStr = payload?.dateRange?.from ?? defaultFrom;
+    const toStr   = payload?.dateRange?.to   ?? defaultTo;
 
     const params = {
       unit:          payload?.unit            ?? "PMD",
       parameterType: payload?.processParameter ?? "Temperature",
-      startDate:     fromStr,
-      endDate:       toStr,
+      startDate:     toEpochFrom(fromStr),
+      endDate:       toEpochTo(toStr),
       machine:       payload?.machine         ?? "all",
       line:          payload?.line            ?? "all",
     };
@@ -366,11 +370,11 @@ export const apiService = {
     const now = new Date();
     const defaultFrom = new Date(now.getTime() - 29 * 86400000);
 
-    // Convert a date string ("yyyy-MM-dd" or "yyyy-MM-dd HH:mm:ss") to epoch ms
-    const toEpoch = (dateStr: string): number => {
-      const iso = dateStr.includes(" ") ? dateStr.replace(" ", "T") : `${dateStr}T00:00:00`;
-      return new Date(iso).getTime();
-    };
+    // Date-only strings map to midnight for start, end-of-day for end
+    const toEpochFrom = (s: string): number =>
+      new Date(s.includes(" ") ? s.replace(" ", "T") : `${s}T00:00:00`).getTime();
+    const toEpochTo   = (s: string): number =>
+      new Date(s.includes(" ") ? s.replace(" ", "T") : `${s}T23:59:59`).getTime();
 
     const fromStr = payload?.dateRange?.from ?? defaultFrom.toISOString().slice(0, 10);
     const toStr   = payload?.dateRange?.to   ?? now.toISOString().slice(0, 10);
@@ -378,8 +382,8 @@ export const apiService = {
     const params = {
       unit:          payload?.unit            ?? "PMD",
       parameterType: payload?.processParameter ?? "Temperature",
-      startDate:     toEpoch(fromStr),
-      endDate:       toEpoch(toStr),
+      startDate:     toEpochFrom(fromStr),
+      endDate:       toEpochTo(toStr),
       machine:       payload?.machine         ?? "all",
       line:          payload?.line            ?? "all",
       family:        payload?.family          ?? "null",
