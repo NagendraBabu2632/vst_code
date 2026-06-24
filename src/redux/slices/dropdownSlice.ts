@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import { apiService } from "@/services/api";
-import { format, subDays, startOfMonth } from "date-fns";
+import { format, subDays, subHours, startOfMonth } from "date-fns";
 
 // ─── Selections shape ─────────────────────────────────────────────────────────
 export interface DropdownSelections {
@@ -79,6 +79,7 @@ const getDateRangeFromPeriod = (period: string): { from: string; to: string } =>
   const now = new Date();
   const today = format(now, "yyyy-MM-dd");
   switch (period) {
+    case "lastHour":    return { from: today, to: today };
     case "today":       return { from: today, to: today };
     case "yesterday": {
       const y = format(subDays(now, 1), "yyyy-MM-dd");
@@ -121,14 +122,28 @@ export const buildEnergyPayload = (s: DropdownSelections): EnergyApiPayload => (
 });
 
 /** Process Analysis: unit, line, machine, processParameter, family + dateRange */
-export const buildProcessPayload = (s: DropdownSelections): ProcessApiPayload => ({
-  unit: s.unit,
-  line: s.line,
-  machine: s.machine,
-  processParameter: s.processParameter,
-  family: s.family,
-  dateRange: getDateRangeFromPeriod(s.period),
-});
+export const buildProcessPayload = (s: DropdownSelections): ProcessApiPayload => {
+  let dateRange: { from: string; to: string };
+  if (s.period === "customLast7" || s.period === "customHistorical") {
+    dateRange = { from: s.dateRangeFrom, to: s.dateRangeTo };
+  } else if (s.period === "lastHour") {
+    const now = new Date();
+    dateRange = {
+      from: format(subHours(now, 1), "yyyy-MM-dd HH:mm:ss"),
+      to:   format(now,              "yyyy-MM-dd HH:mm:ss"),
+    };
+  } else {
+    dateRange = getDateRangeFromPeriod(s.period);
+  }
+  return {
+    unit: s.unit,
+    line: s.line,
+    machine: s.machine,
+    processParameter: s.processParameter,
+    family: s.family,
+    dateRange,
+  };
+};
 
 /** Alerts: unit, line, machine + dateRange */
 export const buildAlertsPayload = (s: DropdownSelections): AlertsApiPayload => ({

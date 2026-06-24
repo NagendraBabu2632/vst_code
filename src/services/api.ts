@@ -326,17 +326,60 @@ export const apiService = {
     }
   },
 
-  // ── Process Analysis ─────────────────────────────────────────────────────
-  async fetchProcessAnalysisData(payload?: ProcessApiPayload) {
-    const today = new Date();
-    const thirtyAgo = new Date(today.getTime() - 29 * 86400000);
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  // ── Process Analysis — download ──────────────────────────────────────────
+  async downloadProcessAnalysisData(payload?: ProcessApiPayload) {
+    const now   = new Date();
+    const today = now.toISOString().slice(0, 10);
+    // Always use date-only strings for the download endpoint
+    const toDateStr = (s: string) => s.slice(0, 10);
+
+    const fromStr = payload?.dateRange?.from ? toDateStr(payload.dateRange.from) : new Date(now.getTime() - 29 * 86400000).toISOString().slice(0, 10);
+    const toStr   = payload?.dateRange?.to   ? toDateStr(payload.dateRange.to)   : today;
 
     const params = {
       unit:          payload?.unit            ?? "PMD",
       parameterType: payload?.processParameter ?? "Temperature",
-      startDate:     payload?.dateRange?.from  ?? fmt(thirtyAgo),
-      endDate:       payload?.dateRange?.to    ?? fmt(today),
+      startDate:     fromStr,
+      endDate:       toStr,
+      machine:       payload?.machine         ?? "all",
+      line:          payload?.line            ?? "all",
+    };
+
+    console.log("[Process Analysis] GET /sensor/data/download params →", params);
+    const res = await execClient.get("/sensor/data/download", { params, responseType: "blob" });
+
+    const disposition = res.headers["content-disposition"] ?? "";
+    const match       = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+    const filename    = match?.[1]?.replace(/['"]/g, "")
+      ?? `${payload?.processParameter ?? "sensor"}_data_${fromStr}_${toStr}.csv`;
+
+    const url = URL.createObjectURL(new Blob([res.data]));
+    const a   = document.createElement("a");
+    a.href     = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  // ── Process Analysis ─────────────────────────────────────────────────────
+  async fetchProcessAnalysisData(payload?: ProcessApiPayload) {
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 29 * 86400000);
+
+    // Convert a date string ("yyyy-MM-dd" or "yyyy-MM-dd HH:mm:ss") to epoch ms
+    const toEpoch = (dateStr: string): number => {
+      const iso = dateStr.includes(" ") ? dateStr.replace(" ", "T") : `${dateStr}T00:00:00`;
+      return new Date(iso).getTime();
+    };
+
+    const fromStr = payload?.dateRange?.from ?? defaultFrom.toISOString().slice(0, 10);
+    const toStr   = payload?.dateRange?.to   ?? now.toISOString().slice(0, 10);
+
+    const params = {
+      unit:          payload?.unit            ?? "PMD",
+      parameterType: payload?.processParameter ?? "Temperature",
+      startDate:     toEpoch(fromStr),
+      endDate:       toEpoch(toStr),
       machine:       payload?.machine         ?? "all",
       line:          payload?.line            ?? "all",
       family:        payload?.family          ?? "null",

@@ -164,14 +164,21 @@
 .process-legend-line--ucl {
   background: hsl(38, 95%, 55%);
 }
+.process-legend-line--dotted {
+  background: none !important;
+  border-top: 2px dashed hsl(38, 95%, 55%);
+}
 .process-legend-line--usl {
-  border-top: 2px dashed hsl(0, 85%, 60%);
+  background: hsl(0, 85%, 60%);
+}
+.process-legend-line--thick {
+  height: 3px;
 }
 .process-legend-line--target {
   border-top: 2px dashed hsl(210, 100%, 60%);
 }
 .process-legend-line--avg {
-  border-top: 2px dashed hsl(280, 80%, 65%);
+  background: hsl(280, 80%, 65%);
 }
 .process-legend-divider {
   margin: 0 0.25rem;
@@ -241,6 +248,39 @@
 }
 .process-pagination-range {
   color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+}
+
+/* No data empty state */
+.process-no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 4rem 2rem;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+
+.process-no-data__icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  opacity: 0.3;
+  margin-bottom: 0.25rem;
+}
+
+.process-no-data__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  margin: 0;
+}
+
+.process-no-data__sub {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  margin: 0;
+  max-width: 36ch;
 }
 
 /* Process control buttons */

@@ -18,6 +18,7 @@ import {
   selectDropdownData,
   buildProcessPayload,
 } from "@/redux/slices/dropdownSlice";
+import { apiService } from "@/services/api";
 import { motion } from "framer-motion";
 import { Droplets, Thermometer, Wind, BarChart3, TrendingUp, Download, Eye, EyeOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,14 +66,15 @@ interface SPCChartProps {
   period: string;
 }
 
-const isMultiDayPeriod = (p: string) => p === "last7" || p === "last30" || p === "thisMonth";
+const isMultiDayPeriod = (p: string) => p === "customLast7" || p === "customHistorical";
 
 const PAGE_SIZE = 288;
 
 const SPCChart = ({ config, delay, period }: SPCChartProps) => {
-  const processData  = useAppSelector(selectProcessData);
+  const processData   = useAppSelector(selectProcessData);
   const controlLimits = useAppSelector(selectControlLimits);
-  const sensorStats  = useAppSelector(selectSensorStats);
+  const sensorStats   = useAppSelector(selectSensorStats);
+  const selections    = useAppSelector(selectDropdownSelections);
 
   const [viewMode, setViewMode]         = useState<"timeseries" | "histogram">("timeseries");
   const [showLimits, setShowLimits]     = useState(true);
@@ -149,16 +151,18 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
     return `${format(d, "dd MMM")}\n${format(d, "HH:mm")}`;
   };
 
-  const handleDownload = useCallback(() => {
-    const csv = ["Timestamp,Sample,Value", ...processData.map((d) => `${d.timestamp},${d.time},${d[config.dataKey as keyof typeof d]}`)].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${config.dataKey}_data.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [config.dataKey, processData]);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    try {
+      await apiService.downloadProcessAnalysisData(buildProcessPayload(selections));
+    } catch (err) {
+      console.error("[Process Analysis] Download failed", err);
+    } finally {
+      setDownloading(false);
+    }
+  }, [selections]);
 
   const canPrev = page > 0;
   const canNext = page < totalPages - 1;
@@ -228,7 +232,7 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
             <Switch checked={showSPCRules} onCheckedChange={setShowSPCRules} />
           </div>
 
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDownload} title="Export CSV">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDownload} title="Download" disabled={downloading}>
             <Download />
           </Button>
         </div>
@@ -282,8 +286,8 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
 
       <div className="process-legend">
         <span className="process-legend-strong">Lines:</span>
-        <span className="process-legend-item"><span className="process-legend-line process-legend-line--usl" /> USL / LSL</span>
-        <span className="process-legend-item"><span className="process-legend-line process-legend-line--ucl" /> UCL / LCL</span>
+        <span className="process-legend-item"><span className="process-legend-line process-legend-line--usl process-legend-line--thick" /> USL / LSL</span>
+        <span className="process-legend-item"><span className="process-legend-line process-legend-line--ucl process-legend-line--dotted" /> UCL / LCL</span>
         <span className="process-legend-item"><span className="process-legend-line process-legend-line--target" /> Target</span>
         <span className="process-legend-item"><span className="process-legend-line process-legend-line--avg" /> Average</span>
       </div>
@@ -355,7 +359,7 @@ const ProcessAnalysis = () => {
 
     const defaults = {
       unit: firstUnit, line: firstLine, machine: firstMachine,
-      processParameter: firstParam, family: firstFamily, period: "last7",
+      processParameter: firstParam, family: firstFamily, period: "lastHour",
     };
 
     dispatch(resetPageSelections(defaults));
@@ -371,7 +375,9 @@ const ProcessAnalysis = () => {
         <h2 className="page-title">Process Analysis</h2>
         <ProcessFilters />
       </div>
-      {loading ? <Loader message="Loading Process Data…" /> : processData.length ? (
+      {loading ? (
+        <Loader message="Loading Process Data…" />
+      ) : processData.length ? (
         <div className="process-list">
           {(() => {
             const activeConfig = chartConfigs.find(
@@ -380,7 +386,13 @@ const ProcessAnalysis = () => {
             return <SPCChart key={activeConfig.dataKey} config={activeConfig} delay={0} period={period} />;
           })()}
         </div>
-      ) : null}
+      ) : (
+        <div className="process-no-data">
+          <BarChart3 className="process-no-data__icon" />
+          <p className="process-no-data__title">No Data Available</p>
+          <p className="process-no-data__sub">No records found for the selected filters. Try adjusting the period or parameters.</p>
+        </div>
+      )}
     </DashboardLayout>
   );
 };

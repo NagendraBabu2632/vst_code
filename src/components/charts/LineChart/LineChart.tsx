@@ -139,15 +139,15 @@ export const SPCTimeseriesChart = ({
 
           {/* Reference lines */}
           {showLimits && [
-            { v: config.usl, color: "hsl(0, 85%, 60%)", label: "USL", dash: "6 3" },
-            { v: config.lsl, color: "hsl(0, 85%, 60%)", label: "LSL", dash: "6 3" },
-            { v: config.ucl, color: "hsl(38, 95%, 55%)", label: "UCL", dash: undefined },
-            { v: config.lcl, color: "hsl(38, 95%, 55%)", label: "LCL", dash: undefined },
-            { v: config.target, color: "hsl(210, 100%, 60%)", label: "Target", dash: "4 2" },
-            { v: avg, color: "hsl(280, 80%, 65%)", label: `Avg ${avg}`, dash: "2 2" },
+            { v: config.usl, color: "hsl(0, 85%, 60%)",  label: "USL",        dash: undefined, width: 2.5 },
+            { v: config.lsl, color: "hsl(0, 85%, 60%)",  label: "LSL",        dash: undefined, width: 2.5 },
+            { v: config.ucl, color: "hsl(38, 95%, 55%)", label: "UCL",        dash: "4 4",     width: 1.5 },
+            { v: config.lcl, color: "hsl(38, 95%, 55%)", label: "LCL",        dash: "4 4",     width: 1.5 },
+            { v: config.target, color: "hsl(210, 100%, 60%)", label: "Target", dash: "4 2",    width: 1.5 },
+            { v: avg, color: "hsl(280, 80%, 65%)",        label: `Avg ${avg}`, dash: undefined, width: 1.5 },
           ].map((r, i) => (
             <g key={i}>
-              <line x1={0} x2={innerW} y1={y(r.v)} y2={y(r.v)} stroke={r.color} strokeWidth={2} strokeDasharray={r.dash} />
+              <line x1={0} x2={innerW} y1={y(r.v)} y2={y(r.v)} stroke={r.color} strokeWidth={r.width} strokeDasharray={r.dash} />
               <text x={innerW + 4} y={y(r.v)} dy={4} fill={r.color} fontSize={10}>{r.label}</text>
             </g>
           ))}
