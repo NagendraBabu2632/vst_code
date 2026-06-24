@@ -35,7 +35,7 @@ interface SPCTimeseriesChartProps {
 }
 
 const HEIGHT = 320;
-const MARGIN = { top: 10, right: 75, bottom: 28, left: 40 };
+const MARGIN = { top: 10, right: 75, bottom: 40, left: 40 };
 
 export const SPCTimeseriesChart = ({
   data, config, xAxisMode, showLimits, showSPCRules, avg, sigmaBands, timeTickFormatter,
@@ -190,10 +190,15 @@ export const SPCTimeseriesChart = ({
             <line x1={0} x2={innerW} stroke={axisStroke} />
             {xTicks.map((d, i) => {
               const cx = x(String(d[xField])) ?? 0;
+              const parts = formatTick(String(d[xField])).split("\n");
               return (
                 <g key={i} transform={`translate(${cx},0)`}>
                   <line y2={4} stroke={axisStroke} />
-                  <text y={16} textAnchor="middle" fill={axisStroke} fontSize={10}>{formatTick(String(d[xField]))}</text>
+                  <text textAnchor="middle" fill={axisStroke} fontSize={10}>
+                    {parts.map((part, pi) => (
+                      <tspan key={pi} x={0} dy={pi === 0 ? 14 : 12}>{part}</tspan>
+                    ))}
+                  </text>
                 </g>
               );
             })}

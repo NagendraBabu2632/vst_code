@@ -15,7 +15,7 @@ import {
   EXEC_ENDPOINTS,
   buildExecParams,
 } from "@/data/executiveApiConfig";
-import type { ApiPayload, ExecApiPayload, EnergyApiPayload } from "@/redux/slices/dropdownSlice";
+import type { ApiPayload, ExecApiPayload, EnergyApiPayload, ProcessApiPayload } from "@/redux/slices/dropdownSlice";
 
 // ─── General backend client ───────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -327,10 +327,53 @@ export const apiService = {
   },
 
   // ── Process Analysis ─────────────────────────────────────────────────────
-  async fetchProcessAnalysisData(payload?: ApiPayload) {
-    console.log("[Process Analysis] API Payload:", payload);
-    const { parameters, controlLimits } = PAGE_DATA.processAnalysis;
-    return { processData, parameters, controlLimits };
+  async fetchProcessAnalysisData(payload?: ProcessApiPayload) {
+    const today = new Date();
+    const thirtyAgo = new Date(today.getTime() - 29 * 86400000);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+    const params = {
+      unit:          payload?.unit            ?? "PMD",
+      parameterType: payload?.processParameter ?? "Temperature",
+      startDate:     payload?.dateRange?.from  ?? fmt(thirtyAgo),
+      endDate:       payload?.dateRange?.to    ?? fmt(today),
+      machine:       payload?.machine         ?? "all",
+      line:          payload?.line            ?? "all",
+      family:        payload?.family          ?? "null",
+    };
+
+    console.log("[Process Analysis] GET /sensor/data params →", params);
+    try {
+      const res = await execClient.get("/sensor/data", { params });
+      const raw = res.data;
+      const paramKey = (raw.parameterType as string).toLowerCase();
+
+      const pd: ProcessData[] = (raw.timeSeries ?? []).map((p: any, i: number) => ({
+        time: String(i + 1),
+        timestamp: p.timestamp,
+        moisture: 0,
+        humidity: 0,
+        temperature: 0,
+        [paramKey]: p.value,
+        moistureTarget: 12.5, moistureLSL: 11, moistureUSL: 14, moistureLCL: 11.5, moistureUCL: 13.5,
+        humidityTarget: 58, humidityLSL: 50, humidityUSL: 65, humidityLCL: 52, humidityUCL: 63,
+        temperatureTarget: 31, temperatureLSL: 27, temperatureUSL: 35, temperatureLCL: 28, temperatureUCL: 34,
+      }));
+
+      const limit = { target: raw.target, lsl: raw.lsl, usl: raw.usl, lcl: raw.lcl, ucl: raw.ucl };
+      const controlLimits = {
+        moisture:    paramKey === "moisture"    ? limit : { target: 12.5, lsl: 11, usl: 14, lcl: 11.5, ucl: 13.5 },
+        temperature: paramKey === "temperature" ? limit : { target: 31, lsl: 27, usl: 35, lcl: 28, ucl: 34 },
+        humidity:    paramKey === "humidity"    ? limit : { target: 58, lsl: 50, usl: 65, lcl: 52, ucl: 63 },
+      };
+      const sensorStats = { avg: raw.avg, sigma: raw.sigma, pp: raw.pp, ppk: raw.ppk, dataPointCount: raw.dataPointCount };
+      const { parameters } = PAGE_DATA.processAnalysis;
+      return { processData: pd, parameters, controlLimits, sensorStats };
+    } catch (err) {
+      console.warn("[Process Analysis] API unavailable, falling back to mock data", err);
+      const { parameters, controlLimits } = PAGE_DATA.processAnalysis;
+      return { processData, parameters, controlLimits, sensorStats: null };
+    }
   },
 
   // ── Alerts ───────────────────────────────────────────────────────────────

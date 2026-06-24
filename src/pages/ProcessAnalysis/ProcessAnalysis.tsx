@@ -9,6 +9,8 @@ import {
   selectProcessLoading,
   selectProcessError,
   selectProcessData,
+  selectControlLimits,
+  selectSensorStats,
 } from "@/redux/slices/processAnalysisSlice";
 import {
   resetPageSelections,
@@ -17,10 +19,10 @@ import {
   buildProcessPayload,
 } from "@/redux/slices/dropdownSlice";
 import { motion } from "framer-motion";
-import { Droplets, Thermometer, Wind, BarChart3, TrendingUp, Download, Eye, EyeOff } from "lucide-react";
+import { Droplets, Thermometer, Wind, BarChart3, TrendingUp, Download, Eye, EyeOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { format, subDays, startOfMonth } from "date-fns";
+import { format } from "date-fns";
 import { SPCTimeseriesChart, type SPCLineConfig } from "../../components/charts/LineChart/LineChart";
 import { SPCHistogramChart } from "../../components/charts/BarChart/BarChart";
 
@@ -65,16 +67,12 @@ interface SPCChartProps {
 
 const isMultiDayPeriod = (p: string) => p === "last7" || p === "last30" || p === "thisMonth";
 
-const getPeriodRange = (p: string): { start: Date; end: Date } | null => {
-  const now = new Date();
-  if (p === "last7")     return { start: subDays(now, 6), end: now };
-  if (p === "last30")    return { start: subDays(now, 29), end: now };
-  if (p === "thisMonth") return { start: startOfMonth(now), end: now };
-  return null;
-};
+const PAGE_SIZE = 288;
 
 const SPCChart = ({ config, delay, period }: SPCChartProps) => {
-  const processData = useAppSelector(selectProcessData);
+  const processData  = useAppSelector(selectProcessData);
+  const controlLimits = useAppSelector(selectControlLimits);
+  const sensorStats  = useAppSelector(selectSensorStats);
 
   const [viewMode, setViewMode]         = useState<"timeseries" | "histogram">("timeseries");
   const [showLimits, setShowLimits]     = useState(true);
@@ -83,14 +81,50 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
   const [xAxisMode, setXAxisMode]       = useState<"sample" | "time">("time");
   const effectiveXAxisMode: "sample" | "time" = multiDay ? "time" : xAxisMode;
 
-  const values = processData.map((d) => d[config.dataKey as keyof typeof d] as number);
-  const stats = useMemo(() => calcStats(values, config.target, config.lsl, config.usl), [values]);
-  const histogramData = useMemo(() => buildHistogramData(values), [values]);
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [processData]);
 
-  const useSigma = true;
+  const totalPages = Math.max(1, Math.ceil(processData.length / PAGE_SIZE));
+  const pagedData = useMemo(
+    () => processData.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [processData, page]
+  );
+
+  const allValues = useMemo(
+    () => processData.map((d) => d[config.dataKey as keyof typeof d] as number).filter((v) => v !== 0),
+    [processData, config.dataKey]
+  );
+
+  const stats = useMemo(() => {
+    if (sensorStats) {
+      return { avg: sensorStats.avg, sigma: sensorStats.sigma, pp: sensorStats.pp, ppk: sensorStats.ppk, points: sensorStats.dataPointCount };
+    }
+    return allValues.length >= 2 ? { ...calcStats(allValues, config.target, config.lsl, config.usl), points: allValues.length } : { avg: 0, sigma: 0, pp: 0, ppk: 0, points: 0 };
+  }, [sensorStats, allValues, config.target, config.lsl, config.usl]);
+
+  const apiLimits = controlLimits?.[config.dataKey as keyof typeof controlLimits];
+
+  const histogramData = useMemo(() => buildHistogramData(allValues.length ? allValues : [0]), [allValues]);
+
   const effectiveConfig: ChartConfig = useMemo(() => {
-    if (!useSigma) return config;
+    if (apiLimits) {
+      const a = stats.avg, s = stats.sigma;
+      const sigmaMin = s > 0 ? a - 3.5 * s : a - 1;
+      const sigmaMax = s > 0 ? a + 3.5 * s : a + 1;
+      const domainMin = +(Math.min(sigmaMin, apiLimits.lsl) - 0.5).toFixed(3);
+      const domainMax = +(Math.max(sigmaMax, apiLimits.usl) + 0.5).toFixed(3);
+      return {
+        ...config,
+        target: apiLimits.target,
+        lsl:    apiLimits.lsl,
+        usl:    apiLimits.usl,
+        lcl:    apiLimits.lcl,
+        ucl:    apiLimits.ucl,
+        yDomain: [domainMin, domainMax] as [number, number],
+      };
+    }
     const a = stats.avg, s = stats.sigma;
+    if (s <= 0) return config;
     return {
       ...config,
       lsl: +(a - 3 * s).toFixed(3),
@@ -99,20 +133,9 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
       ucl: +(a + 2 * s).toFixed(3),
       yDomain: [+(a - 3.5 * s).toFixed(3), +(a + 3.5 * s).toFixed(3)] as [number, number],
     };
-  }, [useSigma, stats.avg, stats.sigma]);
+  }, [config, apiLimits, stats.avg, stats.sigma]);
 
-  const periodRange = useMemo(() => getPeriodRange(period), [period]);
-
-  const displayData = useMemo(() => {
-    if (!periodRange) return processData;
-    const { start, end } = periodRange;
-    const span = end.getTime() - start.getTime();
-    const n = processData.length;
-    return processData.map((d, i) => ({
-      ...d,
-      timestamp: new Date(start.getTime() + (n > 1 ? (i / (n - 1)) * span : 0)).toISOString(),
-    }));
-  }, [periodRange, processData]);
+  const displayData = useMemo(() => pagedData, [pagedData]);
 
   const spanHours = useMemo(() => {
     if (displayData.length < 2) return 0;
@@ -123,10 +146,7 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
 
   const timeTickFormatter = (v: string) => {
     const d = new Date(v);
-    if (multiDay)         return format(d, "dd MMM");
-    if (spanHours <= 24)  return format(d, "HH:mm");
-    if (spanHours <= 168) return format(d, "dd MMM HH:mm");
-    return format(d, "dd MMM");
+    return `${format(d, "dd MMM")}\n${format(d, "HH:mm")}`;
   };
 
   const handleDownload = useCallback(() => {
@@ -139,6 +159,9 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
     a.click();
     URL.revokeObjectURL(url);
   }, [config.dataKey, processData]);
+
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -241,7 +264,7 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
           showLimits={showLimits}
           showSPCRules={showSPCRules}
           avg={stats.avg}
-          sigmaBands={useSigma ? { avg: stats.avg, sigma: stats.sigma } : undefined}
+          sigmaBands={stats.sigma > 0 ? { avg: stats.avg, sigma: stats.sigma } : undefined}
           tooltip={<CustomTooltip />}
           timeTickFormatter={timeTickFormatter}
         />
@@ -264,6 +287,35 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
         <span className="process-legend-item"><span className="process-legend-line process-legend-line--target" /> Target</span>
         <span className="process-legend-item"><span className="process-legend-line process-legend-line--avg" /> Average</span>
       </div>
+
+      {totalPages > 1 && (
+        <div className="process-pagination">
+          <button
+            type="button"
+            className="process-pagination-btn"
+            onClick={() => setPage((p) => p - 1)}
+            disabled={!canPrev}
+            aria-label="Previous page"
+          >
+            <ChevronLeft />
+          </button>
+          <span className="process-pagination-info">
+            Page <strong>{page + 1}</strong> of <strong>{totalPages}</strong>
+            <span className="process-pagination-range">
+              &nbsp;(points {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, processData.length)} of {processData.length})
+            </span>
+          </span>
+          <button
+            type="button"
+            className="process-pagination-btn"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={!canNext}
+            aria-label="Next page"
+          >
+            <ChevronRight />
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 };

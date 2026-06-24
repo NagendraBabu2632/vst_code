@@ -183,7 +183,7 @@ const ProcessFilters = () => {
         { label: "Unit Name",      value: selections.unit,  setter: (v: string) => { const fl = unitToLineMap[v]?.[0]?.value ?? ""; const fm = firstMachineWithBlends(fl); set("unit")(v); set("line")(fl); set("machine")(fm); set("family")((machineToBlendMap[fm] ?? [])[0]?.value ?? ""); set("processParameter")(unitToParamMap[v]?.[0]?.value ?? "Moisture"); }, opts: units.map((u) => ({ value: u.value, label: u.label })) },
         { label: "Line Name",      value: selections.line,  setter: (v: string) => { const fm = firstMachineWithBlends(v); set("line")(v); set("machine")(fm); set("family")((machineToBlendMap[fm] ?? [])[0]?.value ?? ""); }, opts: lines.map((l) => ({ value: l.value, label: l.label })) },
         { label: "Machine Name",   value: selections.machine, setter: (v: string) => { set("machine")(v); set("family")((machineToBlendMap[v] ?? [])[0]?.value ?? ""); setRunTime(""); }, opts: machines.map((m) => ({ value: m.value, label: m.label })) },
-        { label: "Parameter Name", value: selections.processParameter, setter: set("processParameter"), opts: processParams.map((p) => ({ value: p.value, label: p.label })) },
+        { label: "Parameter Name", value: selections.processParameter, setter: (v: string) => { set("processParameter")(v); dispatch(fetchProcessAnalysisData(buildProcessPayload({ ...selections, processParameter: v }))); }, opts: processParams.map((p) => ({ value: p.value, label: p.label })) },
       ].map((f) => (
         <div key={f.label} className="process-filter-field">
           <label className="process-filter-label">{f.label}</label>

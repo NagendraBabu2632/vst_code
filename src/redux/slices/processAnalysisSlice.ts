@@ -11,6 +11,14 @@ interface ControlLimitSet {
   ucl: number;
 }
 
+export interface SensorStats {
+  avg: number;
+  sigma: number;
+  pp: number;
+  ppk: number;
+  dataPointCount: number;
+}
+
 interface ProcessAnalysisState {
   processData: ProcessData[];
   parameters: { id: string; label: string; unit: string; color: string }[];
@@ -19,6 +27,7 @@ interface ProcessAnalysisState {
     humidity: ControlLimitSet;
     temperature: ControlLimitSet;
   } | null;
+  sensorStats: SensorStats | null;
   loading: boolean;
   error: string | null;
 }
@@ -27,6 +36,7 @@ const initialState: ProcessAnalysisState = {
   processData: [],
   parameters: [],
   controlLimits: null,
+  sensorStats: null,
   loading: false,
   error: null,
 };
@@ -57,6 +67,7 @@ const processAnalysisSlice = createSlice({
         state.processData = action.payload.processData;
         state.parameters = action.payload.parameters;
         state.controlLimits = action.payload.controlLimits as ProcessAnalysisState["controlLimits"];
+        state.sensorStats = (action.payload as any).sensorStats ?? null;
       })
       .addCase(fetchProcessAnalysisData.rejected, (state, action) => {
         state.loading = false;
@@ -76,3 +87,5 @@ export const selectProcessData = (s: { processAnalysis: ProcessAnalysisState }) 
   s.processAnalysis.processData;
 export const selectControlLimits = (s: { processAnalysis: ProcessAnalysisState }) =>
   s.processAnalysis.controlLimits;
+export const selectSensorStats = (s: { processAnalysis: ProcessAnalysisState }) =>
+  s.processAnalysis.sensorStats;
