@@ -57,10 +57,10 @@ export interface ProcessApiPayload {
 }
 
 export interface AlertsApiPayload {
-  unit: string;
-  line: string;
-  machine: string;
-  dateRange: { from: string; to: string };
+  unit?: string;
+  parameterType?: string;
+  startDate?: number;
+  endDate?: number;
 }
 
 export interface ReportsApiPayload {
@@ -145,13 +145,35 @@ export const buildProcessPayload = (s: DropdownSelections): ProcessApiPayload =>
   };
 };
 
-/** Alerts: unit, line, machine + dateRange */
-export const buildAlertsPayload = (s: DropdownSelections): AlertsApiPayload => ({
-  unit: s.unit,
-  line: s.line,
-  machine: s.machine,
-  dateRange: getDateRangeFromPeriod(s.period),
-});
+const periodToTimestamps = (period: string): { startDate: number; endDate: number } => {
+  const now = Date.now();
+  switch (period) {
+    case "last1h":
+    case "lastHour":  return { startDate: now - 60 * 60 * 1000, endDate: now };
+    case "last24h":   return { startDate: now - 24 * 60 * 60 * 1000, endDate: now };
+    case "last1m":
+    case "last30":
+    case "30days":    return { startDate: now - 30 * 24 * 60 * 60 * 1000, endDate: now };
+    default: {
+      const dr = getDateRangeFromPeriod(period);
+      return {
+        startDate: new Date(dr.from + "T00:00:00").getTime(),
+        endDate:   new Date(dr.to   + "T23:59:59").getTime(),
+      };
+    }
+  }
+};
+
+/** Alerts: unit, parameterType + timestamp range */
+export const buildAlertsPayload = (s: DropdownSelections, parameterType?: string): AlertsApiPayload => {
+  const { startDate, endDate } = periodToTimestamps(s.period || "last24h");
+  return {
+    unit: s.unit || undefined,
+    parameterType: parameterType && parameterType !== "All" ? parameterType : undefined,
+    startDate,
+    endDate,
+  };
+};
 
 /** Reports: unit, line, machine, family, shift + dateRange */
 export const buildReportsPayload = (s: DropdownSelections): ReportsApiPayload => ({

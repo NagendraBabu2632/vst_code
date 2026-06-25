@@ -7,7 +7,6 @@ import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import { motion } from "framer-motion";
 import { Bell, Gauge, Package, Upload, Plus, Trash2, Pencil, IndianRupee, FlaskConical, History, Download, Zap, CalendarIcon, AlertTriangle, Mail, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { energyTree } from "@/data/energyTreeData";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -21,6 +20,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { apiService } from "@/services/api";
+import type { AlertRuleApi } from "@/services/api";
 
 const parameters = ["Moisture S1", "Moisture S2", "Moisture S3", "Moisture S4"];
 
@@ -827,6 +827,7 @@ interface ShiftRecipients {
 }
 
 interface AlertRule {
+  ruleId?: number;
   id: string;
   name: string;
   unit: string;
@@ -834,60 +835,173 @@ interface AlertRule {
   machine: string;
   parameter: string;
   useLimits: boolean;
+  lsl: string;
+  usl: string;
   severity: "Critical" | "Warning" | "Info";
   emails: string[];
   alertInterval: string;
   daily: ScheduleRecipients;
   shiftWise: ShiftRecipients;
   enabled: boolean;
-  updatedAt: string;
 }
 
-const PARAMETERS = ["Energy (kWh)", "Power (kW)", "Current (A)", "Voltage (V)", "Temperature (°C)", "Vibration (mm/s)"];
+const PARAMETERS = ["Temperature", "Humidity"];
 const SHIFTS: Array<{ value: "A" | "B" | "C"; label: string }> = [
   { value: "A", label: "Shift A (06:00 – 14:00)" },
   { value: "B", label: "Shift B (14:00 – 22:00)" },
   { value: "C", label: "Shift C (22:00 – 06:00)" },
 ];
 
-const initialRules: AlertRule[] = [
-  { id: "AL-001", name: "PMD L1 Mixer Energy", unit: "PMD", line: "PMD-L1", machine: "Mixer-01", parameter: "Energy (kWh)", useLimits: true, severity: "Critical", emails: ["ops@plant.com"], alertInterval: "00:15", daily: { enabled: false, time: "09:00", users: [] }, shiftWise: { enabled: false, shift: "A", users: [] }, enabled: true, updatedAt: new Date().toISOString().slice(0, 10) },
-  { id: "AL-002", name: "SMD Oven Temperature", unit: "SMD", line: "SMD-L1", machine: "Oven-01", parameter: "Temperature (°C)", useLimits: true, severity: "Warning", emails: ["maint@plant.com", "lead@plant.com"], alertInterval: "00:30", daily: { enabled: true, time: "08:00", users: ["supervisor@plant.com"] }, shiftWise: { enabled: false, shift: "A", users: [] }, enabled: true, updatedAt: new Date().toISOString().slice(0, 10) },
-];
+const minutesToHHMM = (minutes: number): string => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+};
+
+const hhmmToMinutes = (hhmm: string): number => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
+const shiftNoToLetter = (n?: number | null): "A" | "B" | "C" => {
+  if (n === 2) return "B";
+  if (n === 3) return "C";
+  return "A";
+};
+
+const shiftLetterToNo = (letter: "A" | "B" | "C"): number => {
+  if (letter === "B") return 2;
+  if (letter === "C") return 3;
+  return 1;
+};
+
+const toStringArray = (v?: string | string[] | null): string[] => {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.filter(Boolean);
+  return v.split(",").map((s) => s.trim()).filter(Boolean);
+};
+
+const apiToLocal = (r: AlertRuleApi): AlertRule => ({
+  ruleId: r.ruleId,
+  id: String(r.ruleId),
+  name: r.ruleName,
+  unit: r.unit,
+  line: r.line,
+  machine: r.machine,
+  parameter: r.parameterType,
+  useLimits: r.useLslUsl,
+  lsl: r.lsl != null ? String(r.lsl) : "",
+  usl: r.usl != null ? String(r.usl) : "",
+  severity: r.severity,
+  emails: toStringArray(r.emailRecipients),
+  alertInterval: minutesToHHMM(r.alertIntervalMinutes),
+  daily: {
+    enabled: r.dailySummaryEnabled,
+    time: r.dailySummaryTime ?? "09:00",
+    users: toStringArray(r.dailySummaryRecipients),
+  },
+  shiftWise: {
+    enabled: r.shiftSummaryEnabled,
+    shift: shiftNoToLetter(r.shiftSummaryShiftNo ?? r.shiftNo),
+    users: toStringArray(r.shiftSummaryRecipients),
+  },
+  enabled: r.isEnabled,
+});
+
+const toCommaSeparated = (arr: string[]): string => arr.join(" , ");
+
+const localToPayload = (draft: AlertRule) => ({
+  ruleName: draft.name,
+  unit: draft.unit,
+  line: draft.line,
+  machine: draft.machine,
+  parameterType: draft.parameter,
+  useLslUsl: draft.useLimits,
+  lsl: !draft.useLimits && draft.lsl !== "" ? parseFloat(draft.lsl) : null,
+  usl: !draft.useLimits && draft.usl !== "" ? parseFloat(draft.usl) : null,
+  severity: draft.severity,
+  alertIntervalMinutes: hhmmToMinutes(draft.alertInterval),
+  emailRecipients: toCommaSeparated(draft.emails),
+  dailySummaryEnabled: draft.daily.enabled,
+  dailySummaryTime: draft.daily.enabled ? draft.daily.time : null,
+  dailySummaryRecipients: draft.daily.enabled ? toCommaSeparated(draft.daily.users) : "",
+  shiftSummaryEnabled: draft.shiftWise.enabled,
+  shiftNo: draft.shiftWise.enabled ? shiftLetterToNo(draft.shiftWise.shift) : null,
+  shiftSummaryRecipients: draft.shiftWise.enabled ? toCommaSeparated(draft.shiftWise.users) : "",
+  isEnabled: draft.enabled,
+});
 
 const emptyRule = (): AlertRule => ({
+  ruleId: undefined,
   id: "",
   name: "",
-  unit: energyTree[0]?.id ?? "",
-  line: energyTree[0]?.lines[0]?.id ?? "",
-  machine: energyTree[0]?.lines[0]?.assets[0]?.id ?? "",
+  unit: "",
+  line: "",
+  machine: "",
   parameter: PARAMETERS[0],
   useLimits: true,
+  lsl: "",
+  usl: "",
   severity: "Warning",
   emails: [],
   alertInterval: "00:15",
   daily: { enabled: false, time: "09:00", users: [] },
   shiftWise: { enabled: false, shift: "A", users: [] },
   enabled: true,
-  updatedAt: new Date().toISOString().slice(0, 10),
 });
 
 const AlertConfigurator = () => {
-  const [rules, setRules] = useState<AlertRule[]>(initialRules);
+  const [rules, setRules] = useState<AlertRule[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<AlertRule>(emptyRule());
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [emailInput, setEmailInput] = useState("");
   const [dailyUserInput, setDailyUserInput] = useState("");
   const [shiftUserInput, setShiftUserInput] = useState("");
 
   const dropdownData = useAppSelector(selectDropdownData);
+  const unitOpts = (dropdownData?.common?.units ?? []) as { value: string; label: string }[];
+  const unitToLineMap = (dropdownData?.common?.unitToLineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const unitLineToMachineMap = (dropdownData?.common?.unitLineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const lineToMachineMap = (dropdownData?.common?.lineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+
+  const lineOpts = (
+    draft.unit && unitToLineMap[draft.unit]
+      ? unitToLineMap[draft.unit]
+      : (dropdownData?.common?.lines ?? [])
+  ) as { value: string; label: string }[];
+
+  const machineOpts = (
+    draft.unit && draft.line && unitLineToMachineMap[`${draft.unit}:${draft.line}`]
+      ? unitLineToMachineMap[`${draft.unit}:${draft.line}`]
+      : draft.line && lineToMachineMap[draft.line]
+        ? lineToMachineMap[draft.line]
+        : (dropdownData?.common?.machines ?? [])
+  ) as { value: string; label: string }[];
+
   const unitToParamMap = (dropdownData?.common?.unitToParamMapping ?? {}) as Record<string, { value: string; label: string }[]>;
   const paramOpts: { value: string; label: string }[] = unitToParamMap[draft.unit]?.length
     ? unitToParamMap[draft.unit]
     : PARAMETERS.map((p) => ({ value: p, label: p }));
 
+  const loadRules = async () => {
+    setLoading(true);
+    try {
+      const data = await apiService.fetchAlertRules();
+      setRules(data.map(apiToLocal));
+    } catch {
+      toast.error("Failed to load alert rules");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadRules(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
   const addDailyUser = () => {
     const v = dailyUserInput.trim();
     if (!v) return;
@@ -897,6 +1011,7 @@ const AlertConfigurator = () => {
     setDailyUserInput("");
   };
   const removeDailyUser = (u: string) => setDraft({ ...draft, daily: { ...draft.daily, users: draft.daily.users.filter((x) => x !== u) } });
+
   const addShiftUser = () => {
     const v = shiftUserInput.trim();
     if (!v) return;
@@ -907,52 +1022,86 @@ const AlertConfigurator = () => {
   };
   const removeShiftUser = (u: string) => setDraft({ ...draft, shiftWise: { ...draft.shiftWise, users: draft.shiftWise.users.filter((x) => x !== u) } });
 
-  const unitObj = energyTree.find((u) => u.id === draft.unit) ?? energyTree[0];
-  const lineObj = unitObj?.lines.find((l) => l.id === draft.line) ?? unitObj?.lines[0];
-
   const openCreate = () => {
-    setDraft(emptyRule());
+    const firstUnit = unitOpts[0]?.value ?? "";
+    const firstLine = unitToLineMap[firstUnit]?.[0]?.value ?? "";
+    const firstMachine = (
+      unitLineToMachineMap[`${firstUnit}:${firstLine}`]?.[0]?.value ??
+      lineToMachineMap[firstLine]?.[0]?.value ?? ""
+    );
+    setDraft({ ...emptyRule(), unit: firstUnit, line: firstLine, machine: firstMachine });
     setEditingId(null);
     setEmailInput("");
+    setDailyUserInput("");
+    setShiftUserInput("");
     setOpen(true);
   };
+
   const openEdit = (rule: AlertRule) => {
     setDraft({ ...rule });
-    setEditingId(rule.id);
+    setEditingId(rule.ruleId ?? null);
     setEmailInput("");
+    setDailyUserInput("");
+    setShiftUserInput("");
     setOpen(true);
   };
-  const removeRule = (id: string) => {
-    setRules((prev) => prev.filter((r) => r.id !== id));
-    toast.info("Alert removed");
+
+  const removeRule = async (rule: AlertRule) => {
+    if (rule.ruleId == null) return;
+    try {
+      await apiService.deleteAlertRule(rule.ruleId);
+      toast.info("Alert rule deleted");
+      setRules((prev) => prev.filter((r) => r.ruleId !== rule.ruleId));
+    } catch {
+      toast.error("Failed to delete alert rule");
+    }
   };
-  const toggleRule = (id: string) => {
-    setRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
+
+  const toggleRule = async (rule: AlertRule) => {
+    if (rule.ruleId == null) return;
+    try {
+      const result = await apiService.toggleAlertRule(rule.ruleId);
+      setRules((prev) => prev.map((r) => r.ruleId === rule.ruleId ? { ...r, enabled: result.isEnabled } : r));
+    } catch {
+      toast.error("Failed to toggle alert rule");
+    }
   };
 
   const addEmail = () => {
     const v = emailInput.trim();
     if (!v) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { toast.error("Invalid email"); return; }
+    if (!isEmail(v)) { toast.error("Invalid email"); return; }
     if (draft.emails.includes(v)) { setEmailInput(""); return; }
     setDraft({ ...draft, emails: [...draft.emails, v] });
     setEmailInput("");
   };
   const removeEmail = (e: string) => setDraft({ ...draft, emails: draft.emails.filter((x) => x !== e) });
 
-  const save = () => {
+  const save = async () => {
     if (!draft.name.trim()) { toast.error("Alert name is required"); return; }
     if (draft.emails.length === 0) { toast.error("Add at least one notification email"); return; }
-    const updatedAt = new Date().toISOString().slice(0, 10);
-    if (editingId) {
-      setRules((prev) => prev.map((r) => (r.id === editingId ? { ...draft, id: editingId, updatedAt } : r)));
-      toast.success("Alert updated");
-    } else {
-      const id = `AL-${String(rules.length + 1).padStart(3, "0")}`;
-      setRules((prev) => [...prev, { ...draft, id, updatedAt }]);
-      toast.success("Alert created");
+    if (!draft.useLimits && (draft.lsl === "" || draft.usl === "")) { toast.error("LSL and USL values are required"); return; }
+    const payload = localToPayload(draft);
+    setSaving(true);
+    try {
+      if (editingId != null) {
+        await apiService.updateAlertRule(editingId, payload);
+        toast.success("Alert rule updated");
+      } else {
+        const result = await apiService.createAlertRule(payload);
+        toast.success("Alert rule created");
+        setRules((prev) => [...prev, { ...draft, ruleId: result.ruleId, id: String(result.ruleId) }]);
+        setOpen(false);
+        setSaving(false);
+        return;
+      }
+      await loadRules();
+      setOpen(false);
+    } catch {
+      toast.error(editingId != null ? "Failed to update alert rule" : "Failed to create alert rule");
+    } finally {
+      setSaving(false);
     }
-    setOpen(false);
   };
 
   return (
@@ -963,7 +1112,7 @@ const AlertConfigurator = () => {
         </div>
         <Button size="sm" onClick={openCreate}><Plus />Create Alert</Button>
       </div>
-      <p className="settings-section-desc">Configure threshold-based alerts on Units, Lines, and Machines. Notifications are sent to the configured email recipients when values cross UCL or LCL.</p>
+      <p className="settings-section-desc">Configure threshold-based alerts on Units, Lines, and Machines. Notifications are sent to the configured email recipients when values cross LSL or USL.</p>
       <Separator />
 
       <div className="settings-table-wrap">
@@ -974,7 +1123,7 @@ const AlertConfigurator = () => {
               <th className="text-left">Name</th>
               <th className="text-left">Scope</th>
               <th className="text-left">Parameter</th>
-              <th className="text-left">LSL/USL</th>
+              <th className="text-left">LSL / USL</th>
               <th className="text-left">Severity</th>
               <th className="text-left">Recipients</th>
               <th className="text-left">Status</th>
@@ -982,25 +1131,30 @@ const AlertConfigurator = () => {
             </tr>
           </thead>
           <tbody>
-            {rules.length === 0 && (
+            {loading ? (
+              <tr><td colSpan={9} className="settings-table-empty">Loading…</td></tr>
+            ) : rules.length === 0 ? (
               <tr><td colSpan={9} className="settings-table-empty">No alerts configured. Click "Create Alert" to add one.</td></tr>
-            )}
-            {rules.map((r) => (
+            ) : rules.map((r) => (
               <tr key={r.id}>
                 <td className="mono">{r.id}</td>
                 <td className="medium">{r.name}</td>
                 <td className="small">{r.unit} › {r.line} › {r.machine}</td>
                 <td className="small">{r.parameter}</td>
-                <td className="small">{r.useLimits ? "Enabled" : "—"}</td>
+                <td className="small">
+                  {r.useLimits && (r.lsl !== "" || r.usl !== "")
+                    ? `${r.lsl !== "" ? r.lsl : "—"} / ${r.usl !== "" ? r.usl : "—"}`
+                    : "—"}
+                </td>
                 <td>
                   <Badge variant="outline" className={`${r.severity === "Critical" ? "settings-badge-peak" : "settings-badge-offpeak"} settings-badge-sm`}>{r.severity}</Badge>
                 </td>
                 <td className="small muted">{r.emails.length} recipient{r.emails.length === 1 ? "" : "s"}</td>
-                <td><Switch checked={r.enabled} onCheckedChange={() => toggleRule(r.id)} /></td>
+                <td><Switch checked={r.enabled} onCheckedChange={() => toggleRule(r)} /></td>
                 <td>
                   <div className="settings-actions-cell">
                     <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => openEdit(r)}><Pencil /></Button>
-                    <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => removeRule(r.id)}><Trash2 /></Button>
+                    <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => removeRule(r)}><Trash2 /></Button>
                   </div>
                 </td>
               </tr>
@@ -1012,46 +1166,66 @@ const AlertConfigurator = () => {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="settings-dialog">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Alert" : "Create Alert"}</DialogTitle>
+            <DialogTitle>{editingId != null ? "Edit Alert Rule" : "Create Alert Rule"}</DialogTitle>
           </DialogHeader>
 
           <div className="settings-section">
             <div className="settings-field">
               <Label>Alert Name</Label>
-              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. PMD L1 Mixer Energy Spike" />
+              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. PMD L1 Mixer Temperature" disabled={editingId != null} />
             </div>
 
             <div className="settings-grid-3">
               <div className="settings-field">
                 <Label>Unit</Label>
                 <Dropdown value={draft.unit} onValueChange={(v) => {
-                  const u = energyTree.find((x) => x.id === v);
-                  const firstLine = u?.lines[0];
-                  const firstParam = (unitToParamMap[v]?.[0]?.value) ?? PARAMETERS[0];
-                  setDraft({ ...draft, unit: v, line: firstLine?.id ?? "", machine: firstLine?.assets[0]?.id ?? "", parameter: firstParam });
-                }} options={energyTree.map((u) => ({ value: u.id, label: u.name }))} />
+                  const firstLine = unitToLineMap[v]?.[0]?.value ?? "";
+                  const firstMachine = (
+                    unitLineToMachineMap[`${v}:${firstLine}`]?.[0]?.value ??
+                    lineToMachineMap[firstLine]?.[0]?.value ?? ""
+                  );
+                  const firstParam = unitToParamMap[v]?.[0]?.value ?? PARAMETERS[0];
+                  setDraft({ ...draft, unit: v, line: firstLine, machine: firstMachine, parameter: firstParam });
+                }} options={unitOpts} />
               </div>
               <div className="settings-field">
                 <Label>Line</Label>
                 <Dropdown value={draft.line} onValueChange={(v) => {
-                  const l = unitObj?.lines.find((x) => x.id === v);
-                  setDraft({ ...draft, line: v, machine: l?.assets[0]?.id ?? "" });
-                }} options={(unitObj?.lines ?? []).map((l) => ({ value: l.id, label: l.name }))} />
+                  const firstMachine = (
+                    unitLineToMachineMap[`${draft.unit}:${v}`]?.[0]?.value ??
+                    lineToMachineMap[v]?.[0]?.value ?? ""
+                  );
+                  setDraft({ ...draft, line: v, machine: firstMachine });
+                }} options={lineOpts} />
               </div>
               <div className="settings-field">
                 <Label>Machine</Label>
-                <Dropdown value={draft.machine} onValueChange={(v) => setDraft({ ...draft, machine: v })} options={(lineObj?.assets ?? []).map((a) => ({ value: a.id, label: a.name }))} />
+                <Dropdown value={draft.machine} onValueChange={(v) => setDraft({ ...draft, machine: v })} options={machineOpts} />
               </div>
             </div>
 
             <div className="settings-field">
-              <Label>Parameter</Label>
+              <Label>Parameter Type</Label>
               <Dropdown value={draft.parameter} onValueChange={(v) => setDraft({ ...draft, parameter: v })} options={paramOpts} />
             </div>
+
             <div className="settings-label-checkbox-row settings-field">
-              <Checkbox id="useLimits" checked={draft.useLimits} onCheckedChange={(v) => setDraft({ ...draft, useLimits: v === true })} />
-              <Label htmlFor="useLimits" className="settings-checkbox-label">LSL/USL</Label>
+              <Checkbox id="useLimits" checked={draft.useLimits} onCheckedChange={(v) => setDraft({ ...draft, useLimits: v === true, lsl: "", usl: "" })} />
+              <Label htmlFor="useLimits" className="settings-checkbox-label">Use LSL / USL limits</Label>
             </div>
+
+            {!draft.useLimits && (
+              <div className="settings-grid-3-cells">
+                <div className="settings-field">
+                  <Label>LSL</Label>
+                  <Input type="number" step="any" placeholder="Lower spec limit" value={draft.lsl} onChange={(e) => setDraft({ ...draft, lsl: e.target.value })} />
+                </div>
+                <div className="settings-field">
+                  <Label>USL</Label>
+                  <Input type="number" step="any" placeholder="Upper spec limit" value={draft.usl} onChange={(e) => setDraft({ ...draft, usl: e.target.value })} />
+                </div>
+              </div>
+            )}
 
             <div className="settings-field">
               <Label>Severity</Label>
@@ -1159,8 +1333,6 @@ const AlertConfigurator = () => {
               </div>
             </div>
 
-
-
             <div className="settings-notif-row">
               <Label className="settings-checkbox-label">Enable this alert</Label>
               <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} />
@@ -1168,8 +1340,8 @@ const AlertConfigurator = () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save}>{editingId ? "Save Changes" : "Create Alert"}</Button>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving}>{saving ? "Saving…" : editingId != null ? "Save Changes" : "Create Alert"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

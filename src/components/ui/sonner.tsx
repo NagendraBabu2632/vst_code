@@ -5,7 +5,7 @@ type ToasterProps = React.ComponentProps<typeof Sonner>;
 const Toaster = ({ ...props }: ToasterProps) => (
   <Sonner
     theme="system"
-    position="bottom-right"
+    position="top-right"
     toastOptions={{
       style: {
         background: "var(--card)",

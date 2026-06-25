@@ -529,7 +529,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
-  z-index: 50;
+  z-index: 10001;
   overflow: hidden;
   min-width: var(--radix-select-trigger-width);
   max-height: var(--radix-select-content-available-height);

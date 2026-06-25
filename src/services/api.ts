@@ -192,6 +192,83 @@ function transformEnergyResponse(raw: any): {
   return { tree, slotLabels, shiftLabels };
 }
 
+// ─── Alerts Types ────────────────────────────────────────────────────────────
+
+export interface AlertApiItem {
+  alertId: number;
+  ruleId: number;
+  ruleName: string;
+  unit: string;
+  parameterType: string;
+  tagName: string;
+  timestamp: string;
+  value: number;
+  lsl: number;
+  usl: number;
+  severity: "Critical" | "Warning" | "Info";
+  isAcknowledged: boolean;
+  acknowledgedBy: string | null;
+  acknowledgedAt: string | null;
+  createdAt: string;
+}
+
+export interface AlertsResponse {
+  totalAlerts: number;
+  criticalAlerts: number;
+  warningAlerts: number;
+  acknowledged: number;
+  total: number;
+  page: number;
+  pageSize: number;
+  items: AlertApiItem[];
+}
+
+// ─── Alert Rules Types ────────────────────────────────────────────────────────
+
+export interface AlertRuleApi {
+  ruleId: number;
+  ruleName: string;
+  unit: string;
+  line: string;
+  machine: string;
+  parameterType: string;
+  useLslUsl: boolean;
+  lsl?: number | null;
+  usl?: number | null;
+  severity: "Info" | "Warning" | "Critical";
+  alertIntervalMinutes: number;
+  emailRecipients?: string | string[];
+  dailySummaryEnabled: boolean;
+  dailySummaryTime?: string | null;
+  dailySummaryRecipients?: string | string[];
+  shiftSummaryEnabled: boolean;
+  shiftSummaryShiftNo?: number | null;
+  shiftNo?: number | null;
+  shiftSummaryRecipients?: string | string[];
+  isEnabled: boolean;
+}
+
+export interface AlertRulePayload {
+  ruleName: string;
+  unit: string;
+  line: string;
+  machine: string;
+  parameterType: string;
+  useLslUsl: boolean;
+  lsl?: number | null;
+  usl?: number | null;
+  severity: "Info" | "Warning" | "Critical";
+  alertIntervalMinutes: number;
+  emailRecipients?: string;
+  dailySummaryEnabled: boolean;
+  dailySummaryTime?: string | null;
+  dailySummaryRecipients?: string;
+  shiftSummaryEnabled: boolean;
+  shiftNo?: number | null;
+  shiftSummaryRecipients?: string;
+  isEnabled: boolean;
+}
+
 // ─── Centralised API Service ──────────────────────────────────────────────────
 
 export const apiService = {
@@ -424,9 +501,14 @@ export const apiService = {
   },
 
   // ── Alerts ───────────────────────────────────────────────────────────────
-  async fetchAlertsData(payload?: ApiPayload) {
-    console.log("[Alerts] API Payload:", payload);
-    return { alerts: alertsData };
+  async fetchAlertsData(payload?: { unit?: string; parameterType?: string; startDate?: number; endDate?: number }) {
+    const params: Record<string, any> = {};
+    if (payload?.unit) params.unit = payload.unit;
+    if (payload?.parameterType) params.parameterType = payload.parameterType;
+    if (payload?.startDate) params.startDate = payload.startDate;
+    if (payload?.endDate) params.endDate = payload.endDate;
+    const res = await apiClient.get("/alerts", { params });
+    return res.data as AlertsResponse;
   },
 
   // ── Reports ──────────────────────────────────────────────────────────────
@@ -521,6 +603,32 @@ export const apiService = {
   async fetchProductionData(date: string) {
     const res = await apiClient.get("/production", { params: { date } });
     return res.data;
+  },
+
+  // ── Alert Rules ───────────────────────────────────────────────────────────
+  async fetchAlertRules(params?: { unit?: string; parameterType?: string; isEnabled?: boolean }) {
+    const res = await apiClient.get("/alert-rules", { params });
+    return res.data as AlertRuleApi[];
+  },
+
+  async createAlertRule(payload: AlertRulePayload) {
+    const res = await apiClient.post("/alert-rules", payload);
+    return res.data as { ruleId: number; message: string };
+  },
+
+  async updateAlertRule(id: number, payload: AlertRulePayload) {
+    const res = await apiClient.put(`/alert-rules/${id}`, payload);
+    return res.data as { message: string };
+  },
+
+  async toggleAlertRule(id: number) {
+    const res = await apiClient.patch(`/alert-rules/${id}/toggle`);
+    return res.data as { ruleId: number; isEnabled: boolean };
+  },
+
+  async deleteAlertRule(id: number) {
+    const res = await apiClient.delete(`/alert-rules/${id}`);
+    return res.data as { message: string };
   },
 };
 

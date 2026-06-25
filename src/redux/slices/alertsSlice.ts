@@ -1,16 +1,26 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import { apiService } from "@/services/api";
-import type { Alert } from "@/data/mockData";
+import type { AlertApiItem, AlertsResponse } from "@/services/api";
 import type { AlertsApiPayload } from "@/redux/slices/dropdownSlice";
 
+export type AlertItem = AlertApiItem & { acknowledgedComment?: string };
+
 interface AlertsState {
-  alerts: Alert[];
+  items: AlertItem[];
+  totalAlerts: number;
+  criticalAlerts: number;
+  warningAlerts: number;
+  acknowledgedCount: number;
   loading: boolean;
   error: string | null;
 }
 
 const initialState: AlertsState = {
-  alerts: [],
+  items: [],
+  totalAlerts: 0,
+  criticalAlerts: 0,
+  warningAlerts: 0,
+  acknowledgedCount: 0,
   loading: false,
   error: null,
 };
@@ -33,18 +43,19 @@ const alertsSlice = createSlice({
     acknowledgeAlert(
       state,
       action: PayloadAction<{
-        id: string;
+        alertId: number;
         acknowledgedBy: string;
         acknowledgedAt: string;
         acknowledgedComment: string;
       }>
     ) {
-      const alert = state.alerts.find((a) => a.id === action.payload.id);
+      const alert = state.items.find((a) => a.alertId === action.payload.alertId);
       if (alert) {
-        alert.acknowledged = true;
+        alert.isAcknowledged = true;
         alert.acknowledgedBy = action.payload.acknowledgedBy;
         alert.acknowledgedAt = action.payload.acknowledgedAt;
         alert.acknowledgedComment = action.payload.acknowledgedComment;
+        state.acknowledgedCount += 1;
       }
     },
   },
@@ -56,10 +67,13 @@ const alertsSlice = createSlice({
       })
       .addCase(fetchAlertsData.fulfilled, (state, action) => {
         state.loading = false;
-        // Only show process parameter alerts (Moisture/Humidity/Temperature)
-        state.alerts = action.payload.alerts.filter((a) =>
-          ["Moisture", "Humidity", "Temperature"].includes(a.parameter as string)
-        );
+        const res = action.payload as AlertsResponse;
+        const items = res.items ?? [];
+        state.items = items;
+        state.totalAlerts    = res.totalAlerts    ?? res.total ?? items.length;
+        state.criticalAlerts = res.criticalAlerts ?? items.filter((i) => i.severity === "Critical").length;
+        state.warningAlerts  = res.warningAlerts  ?? items.filter((i) => i.severity === "Warning").length;
+        state.acknowledgedCount = res.acknowledged ?? items.filter((i) => i.isAcknowledged).length;
       })
       .addCase(fetchAlertsData.rejected, (state, action) => {
         state.loading = false;
@@ -71,10 +85,12 @@ const alertsSlice = createSlice({
 export const { acknowledgeAlert } = alertsSlice.actions;
 export default alertsSlice.reducer;
 
-// Selectors
-export const selectAlertsLoading = (s: { alerts: AlertsState }) =>
-  s.alerts.loading;
-export const selectAlertsError = (s: { alerts: AlertsState }) =>
-  s.alerts.error;
-export const selectAlerts = (s: { alerts: AlertsState }) =>
-  s.alerts.alerts;
+export const selectAlertsLoading = (s: { alerts: AlertsState }) => s.alerts.loading;
+export const selectAlertsError   = (s: { alerts: AlertsState }) => s.alerts.error;
+export const selectAlerts        = (s: { alerts: AlertsState }) => s.alerts.items;
+export const selectAlertsKpi     = (s: { alerts: AlertsState }) => ({
+  totalAlerts:    s.alerts.totalAlerts,
+  criticalAlerts: s.alerts.criticalAlerts,
+  warningAlerts:  s.alerts.warningAlerts,
+  acknowledged:   s.alerts.acknowledgedCount,
+});
