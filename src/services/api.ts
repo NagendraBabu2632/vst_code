@@ -395,7 +395,7 @@ export const apiService = {
       const raw = res.data;
       const paramKey = (raw.parameterType as string).toLowerCase();
 
-      const pd: ProcessData[] = (raw.timeSeries ?? []).map((p: any, i: number) => ({
+      const pd: any[] = (raw.timeSeries ?? []).map((p: any, i: number) => ({
         time: String(i + 1),
         timestamp: p.timestamp,
         moisture: 0,

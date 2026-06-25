@@ -232,43 +232,91 @@
   height: 1rem;
 }
 
-/* ── Period row with edit button ── */
-.process-filter-period-row {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
+/* ── PeriodSelector — custom always-firing dropdown ── */
+.period-sel {
+  position: relative;
+  width: 100%;
 }
 
-.process-filter-period-edit {
+.period-sel-trigger {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2.25rem;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
-}
-
-.process-filter-period-edit:hover {
-  background: var(--muted);
+  background-color: var(--card);
   color: var(--foreground);
+  padding: 0.375rem 0.75rem;
+  height: 2.25rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+  white-space: nowrap;
 }
 
-.process-filter-range-hint {
-  display: block;
-  margin-top: 0.25rem;
-  font-size: 0.65rem;
+.period-sel-trigger:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px hsl(210 100% 50% / 0.2);
+}
+
+.period-sel-placeholder {
   color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+}
+
+.period-sel-chevron {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.period-sel-content {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px -4px rgba(0,0,0,0.2);
+  z-index: 9990;
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
+  padding: 0.25rem;
+  min-width: 220px;
+}
+
+.period-sel-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.4rem 0.625rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: var(--foreground);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.period-sel-item:hover {
+  background: var(--muted);
+}
+
+.period-sel-item--active {
+  background: var(--muted);
+  font-weight: 500;
+}
+
+.period-sel-check {
+  flex-shrink: 0;
+  color: var(--primary);
 }
 
 /* ── Date-Time Range Picker Modal ── */

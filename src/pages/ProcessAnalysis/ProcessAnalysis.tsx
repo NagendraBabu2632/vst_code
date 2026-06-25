@@ -279,6 +279,9 @@ const SPCChart = ({ config, delay, period }: SPCChartProps) => {
           unit={effectiveConfig.unit}
           lsl={effectiveConfig.lsl}
           usl={effectiveConfig.usl}
+          target={effectiveConfig.target}
+          lcl={effectiveConfig.lcl}
+          ucl={effectiveConfig.ucl}
           showLimits={showLimits}
           tooltip={<HistogramTooltip />}
         />

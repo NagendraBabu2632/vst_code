@@ -240,7 +240,7 @@ export const AssetEnergyBarChart = ({ data, mode }: AssetEnergyBarChartProps) =>
 };
 
 /* ============================================================
- * SPC Histogram (vertical bars, frequency distribution)
+ * SPC Histogram (vertical bars + LSL/USL/Target/LCL/UCL lines)
  * ========================================================== */
 
 interface HistogramBin { range: number; count: number; binStart: number; binEnd: number; }
@@ -251,31 +251,76 @@ interface SPCHistogramChartProps {
   unit: string;
   lsl?: number;
   usl?: number;
+  target?: number;
+  lcl?: number;
+  ucl?: number;
   showLimits?: boolean;
   /** Kept for API compatibility; not rendered. */
   tooltip?: ReactElement;
 }
 
-const HIST_HEIGHT = 320;
-const HIST_MARGIN = { top: 16, right: 20, bottom: 32, left: 40 };
+interface RefLine {
+  val: number;
+  label: string;
+  color: string;
+  dash?: string;
+  strokeWidth: number;
+}
 
-export const SPCHistogramChart = ({ data, lineColor, unit, lsl, usl, showLimits = true }: SPCHistogramChartProps) => {
+const HIST_HEIGHT = 340;
+const HIST_MARGIN = { top: 42, right: 24, bottom: 36, left: 44 };
+
+export const SPCHistogramChart = ({
+  data, lineColor, unit,
+  lsl, usl, target, lcl, ucl,
+  showLimits = true,
+}: SPCHistogramChartProps) => {
   const { ref, width } = useChartSize(700);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
   const innerW = Math.max(20, width - HIST_MARGIN.left - HIST_MARGIN.right);
   const innerH = HIST_HEIGHT - HIST_MARGIN.top - HIST_MARGIN.bottom;
 
-  const x = useMemo(
-    () => d3.scaleBand<string>().domain(data.map((d) => String(d.range))).range([0, innerW]).padding(0.1),
-    [data, innerW]
-  );
+  // Linear x scale — spans all bin edges + every reference line value
+  const x = useMemo(() => {
+    const vals = [
+      ...data.map((d) => d.binStart),
+      ...data.map((d) => d.binEnd),
+      ...[lsl, usl, target, lcl, ucl].filter((v): v is number => v !== undefined),
+    ];
+    if (!vals.length) return d3.scaleLinear().domain([0, 1]).range([0, innerW]);
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const pad = (hi - lo) * 0.06 || 1;
+    return d3.scaleLinear().domain([lo - pad, hi + pad]).nice().range([0, innerW]);
+  }, [data, lsl, usl, target, lcl, ucl, innerW]);
+
   const y = useMemo(
     () => d3.scaleLinear().domain([0, d3.max(data, (d) => d.count) ?? 1]).nice().range([innerH, 0]),
     [data, innerH]
   );
+
   const yTicks = y.ticks(5);
-  const xTicks = data.filter((_, i) => i % Math.max(1, Math.floor(data.length / 8)) === 0);
+  const xTicks = x.ticks(8);
+
+  // Color each bar by SPC zone
+  const barFill = (d: HistogramBin) => {
+    const mid = (d.binStart + d.binEnd) / 2;
+    if ((lsl !== undefined && mid < lsl) || (usl !== undefined && mid > usl))
+      return "hsl(0, 75%, 55%)";
+    if ((lcl !== undefined && mid < lcl) || (ucl !== undefined && mid > ucl))
+      return "hsl(38, 95%, 55%)";
+    return lineColor;
+  };
+
+  // Vertical reference lines ordered so narrower limits draw on top
+  const refLines: RefLine[] = showLimits ? [
+    lsl    !== undefined ? { val: lsl,    label: "LSL",    color: "hsl(0, 85%, 60%)",    strokeWidth: 2 } : null,
+    usl    !== undefined ? { val: usl,    label: "USL",    color: "hsl(0, 85%, 60%)",    strokeWidth: 2 } : null,
+    lcl    !== undefined ? { val: lcl,    label: "LCL",    color: "hsl(38, 95%, 55%)",   strokeWidth: 1.5, dash: "5 3" } : null,
+    ucl    !== undefined ? { val: ucl,    label: "UCL",    color: "hsl(38, 95%, 55%)",   strokeWidth: 1.5, dash: "5 3" } : null,
+    target !== undefined ? { val: target, label: "Target", color: "hsl(210, 100%, 60%)", strokeWidth: 1.5, dash: "4 4" } : null,
+  ].filter(Boolean) as RefLine[] : [];
 
   const showTip = useCallback((e: React.MouseEvent, d: HistogramBin) => {
     const tt = tooltipRef.current;
@@ -292,24 +337,98 @@ export const SPCHistogramChart = ({ data, lineColor, unit, lsl, usl, showLimits 
   return (
     <div ref={ref} className="d3-bar-wrap">
       <svg width={width} height={HIST_HEIGHT}>
+        <defs>
+          {/* Subtle zone shading */}
+          <clipPath id="hist-clip">
+            <rect x={0} y={0} width={innerW} height={innerH} />
+          </clipPath>
+        </defs>
         <g transform={`translate(${HIST_MARGIN.left},${HIST_MARGIN.top})`}>
+
+          {/* Zone background fills */}
+          {showLimits && (
+            <g clipPath="url(#hist-clip)">
+              {lsl !== undefined && (
+                <rect x={0} y={0}
+                  width={Math.max(0, x(lsl))} height={innerH}
+                  fill="hsl(0,75%,55%)" fillOpacity={0.07} />
+              )}
+              {usl !== undefined && (
+                <rect x={x(usl)} y={0}
+                  width={Math.max(0, innerW - x(usl))} height={innerH}
+                  fill="hsl(0,75%,55%)" fillOpacity={0.07} />
+              )}
+              {lsl !== undefined && lcl !== undefined && (
+                <rect x={x(lsl)} y={0}
+                  width={Math.max(0, x(lcl) - x(lsl))} height={innerH}
+                  fill="hsl(38,95%,55%)" fillOpacity={0.07} />
+              )}
+              {ucl !== undefined && usl !== undefined && (
+                <rect x={x(ucl)} y={0}
+                  width={Math.max(0, x(usl) - x(ucl))} height={innerH}
+                  fill="hsl(38,95%,55%)" fillOpacity={0.07} />
+              )}
+            </g>
+          )}
+
+          {/* Horizontal grid lines */}
           {yTicks.map((t) => (
-            <line key={t} x1={0} x2={innerW} y1={y(t)} y2={y(t)} stroke={gridStroke} strokeDasharray="3 3" />
+            <line key={t} x1={0} x2={innerW} y1={y(t)} y2={y(t)}
+              stroke={gridStroke} strokeDasharray="3 3" />
           ))}
+
+          {/* Histogram bars (linear-positioned) */}
           {data.map((d) => {
-            const bx = x(String(d.range)) ?? 0;
-            const bh = Math.max(0, innerH - y(d.count));
+            const bx  = x(d.binStart);
+            const bw  = Math.max(1, x(d.binEnd) - x(d.binStart) - 1);
+            const bh  = Math.max(0, innerH - y(d.count));
             return (
               <rect
                 key={d.range}
-                x={bx} y={y(d.count)} width={x.bandwidth()} height={bh}
-                fill={lineColor} fillOpacity={0.8} rx={3}
+                x={bx} y={y(d.count)} width={bw} height={bh}
+                fill={barFill(d)} fillOpacity={0.85} rx={2}
                 onMouseEnter={(e) => showTip(e, d)}
                 onMouseMove={(e) => showTip(e, d)}
                 onMouseLeave={hideTip}
               />
             );
           })}
+
+          {/* Vertical reference lines with pill labels at the top */}
+          {refLines.map(({ val, label, color, dash, strokeWidth: sw }) => {
+            const cx = x(val);
+            if (cx < -2 || cx > innerW + 2) return null;
+            const pillText = `${label}: ${Number(val).toFixed(2)}`;
+            const pillW    = Math.max(52, pillText.length * 6.2 + 14);
+            const pillH    = 18;
+            // Clamp pill so it never overflows left/right of the SVG
+            const pillCx   = Math.max(pillW / 2, Math.min(innerW - pillW / 2, cx));
+            return (
+              <g key={label}>
+                {/* Vertical line */}
+                <line
+                  x1={cx} x2={cx} y1={0} y2={innerH}
+                  stroke={color} strokeWidth={sw}
+                  strokeDasharray={dash}
+                />
+                {/* Pill badge */}
+                <g transform={`translate(${pillCx}, ${-(HIST_MARGIN.top / 2)})`}>
+                  <rect
+                    x={-pillW / 2} y={-pillH / 2}
+                    width={pillW} height={pillH}
+                    rx={3} fill={color}
+                  />
+                  <text
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize={9} fontWeight={700} fill="white"
+                  >
+                    {pillText}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+
           {/* Y axis */}
           <line y1={0} y2={innerH} stroke={axisStroke} />
           {yTicks.map((t) => (
@@ -318,20 +437,23 @@ export const SPCHistogramChart = ({ data, lineColor, unit, lsl, usl, showLimits 
               <text x={-8} dy={4} textAnchor="end" fontSize={11} fill={axisStroke}>{t}</text>
             </g>
           ))}
-          <text transform={`translate(-30,${innerH / 2}) rotate(-90)`} textAnchor="middle" fontSize={10} fill={axisStroke}>Frequency</text>
+          <text
+            transform={`translate(-34,${innerH / 2}) rotate(-90)`}
+            textAnchor="middle" fontSize={10} fill={axisStroke}
+          >
+            Frequency
+          </text>
+
           {/* X axis */}
           <g transform={`translate(0,${innerH})`}>
             <line x1={0} x2={innerW} stroke={axisStroke} />
-            {xTicks.map((d) => {
-              const bx = (x(String(d.range)) ?? 0) + x.bandwidth() / 2;
-              return (
-                <g key={d.range} transform={`translate(${bx},0)`}>
-                  <line y2={4} stroke={axisStroke} />
-                  <text y={16} textAnchor="middle" fontSize={10} fill={axisStroke}>{d.range}</text>
-                </g>
-              );
-            })}
-            <text x={innerW} y={28} textAnchor="end" fontSize={10} fill={axisStroke}>{unit}</text>
+            {xTicks.map((t) => (
+              <g key={t} transform={`translate(${x(t)},0)`}>
+                <line y2={4} stroke={axisStroke} />
+                <text y={15} textAnchor="middle" fontSize={10} fill={axisStroke}>{t}</text>
+              </g>
+            ))}
+            <text x={innerW} y={30} textAnchor="end" fontSize={10} fill={axisStroke}>{unit}</text>
           </g>
         </g>
       </svg>

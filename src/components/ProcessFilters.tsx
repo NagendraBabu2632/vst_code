@@ -1,9 +1,9 @@
 import "./ProcessFilters.css";
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { format, subDays, subMonths, subHours, startOfDay, endOfDay, startOfMonth } from "date-fns";
 import { DayPicker } from "react-day-picker";
-import { Check, Clock, ChevronUp, ChevronDown, Calendar } from "lucide-react";
+import { Check, Clock, ChevronUp, ChevronDown } from "lucide-react";
 import Dropdown, { DropdownItem } from "@/components/Dropdown";
 import { toast } from "sonner";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
@@ -116,6 +116,72 @@ const TimeSpinner = ({
   </div>
 );
 
+// ── PeriodSelector — always fires onChange even when same option re-clicked ────
+// Radix Select deliberately skips onValueChange for the same value, which
+// prevents re-opening the custom date picker. This plain button-based dropdown
+// fires every time.
+const PeriodSelector = ({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const label = options.find((o) => o.value === value)?.label;
+
+  return (
+    <div ref={containerRef} className="period-sel">
+      <button
+        type="button"
+        className="period-sel-trigger"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className={label ? "" : "period-sel-placeholder"}>
+          {label ?? "Select period…"}
+        </span>
+        <ChevronDown className="period-sel-chevron" size={14} />
+      </button>
+
+      {open && (
+        <div className="period-sel-content" role="listbox" aria-label="Period options">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="option"
+              aria-selected={opt.value === value}
+              className={`period-sel-item${opt.value === value ? " period-sel-item--active" : ""}`}
+              onClick={() => {
+                setOpen(false);
+                onChange(opt.value);
+              }}
+            >
+              {opt.label}
+              {opt.value === value && <Check className="period-sel-check" size={12} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── DateTimeRangePicker modal ──────────────────────────────────────────────────
 interface DateTimeRangePickerProps {
   mode: "last7" | "historical";
@@ -137,7 +203,7 @@ const DateTimeRangePicker = ({
     ? startOfDay(subDays(now, 7))
     : startOfDay(subMonths(now, 6));
 
-  const defaultStart = mode === "last7" ? startOfDay(subDays(now, 7)) : subDays(now, 1);
+  const defaultStart = mode === "last7" ? startOfDay(subDays(now, 7)) : subMonths(now, 1);
   const defaultEnd   = now;
 
   const [startDate,  setStartDate]  = useState<Date>(initialFrom ?? defaultStart);
@@ -306,13 +372,6 @@ const ProcessFilters = () => {
     }
   };
 
-  // Re-open the picker for the current custom period
-  const handleEditCustomRange = () => {
-    prevPeriodRef.current = selections.period;
-    setPickerMode(selections.period === "customLast7" ? "last7" : "historical");
-    setPickerOpen(true);
-  };
-
   const handlePickerConfirm = (from: string, to: string) => {
     const periodValue = pickerMode === "last7" ? "customLast7" : "customHistorical";
     dispatch(setDropdownSelection({ key: "period",       value: periodValue }));
@@ -356,13 +415,16 @@ const ProcessFilters = () => {
     setRunTime("");
   };
 
-  const isCustomPeriod =
-    selections.period === "customLast7" || selections.period === "customHistorical";
+  // Only restore saved dates when re-opening the SAME custom mode.
+  // Switching from customLast7 → historical must NOT carry over the 7-day range.
+  const pickerMatchesCurrent =
+    (pickerMode === "last7"       && selections.period === "customLast7") ||
+    (pickerMode === "historical"  && selections.period === "customHistorical");
 
-  const pickerInitialFrom = isCustomPeriod && selections.dateRangeFrom
+  const pickerInitialFrom = pickerMatchesCurrent && selections.dateRangeFrom
     ? new Date(selections.dateRangeFrom) : undefined;
-  const pickerInitialTo = isCustomPeriod && selections.dateRangeTo
-    ? new Date(selections.dateRangeTo) : undefined;
+  const pickerInitialTo   = pickerMatchesCurrent && selections.dateRangeTo
+    ? new Date(selections.dateRangeTo)   : undefined;
 
   return (
     <div className="process-filters">
@@ -427,24 +489,11 @@ const ProcessFilters = () => {
       {/* ── Period */}
       <div className="process-filter-field--period">
         <label className="process-filter-label">Period</label>
-        <div className="process-filter-period-row">
-          <Dropdown
-            value={selections.period}
-            onValueChange={handlePeriodChange}
-            placeholder="Select period…"
-            options={periodOptions}
-          />
-          {isCustomPeriod && (
-            <button
-              type="button"
-              className="process-filter-period-edit"
-              onClick={handleEditCustomRange}
-              title="Edit date range"
-            >
-              <Calendar size={13} />
-            </button>
-          )}
-        </div>
+        <PeriodSelector
+          value={selections.period}
+          options={periodOptions}
+          onChange={handlePeriodChange}
+        />
       </div>
 
       {/* ── Blend — hidden for SMD unit */}
