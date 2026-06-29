@@ -145,7 +145,7 @@ export const buildProcessPayload = (s: DropdownSelections): ProcessApiPayload =>
   };
 };
 
-const periodToTimestamps = (period: string): { startDate: number; endDate: number } => {
+export const periodToTimestamps = (period: string): { startDate: number; endDate: number } => {
   const now = Date.now();
   switch (period) {
     case "last1h":
@@ -187,6 +187,20 @@ export const buildReportsPayload = (s: DropdownSelections): ReportsApiPayload =>
       ? { from: s.dateRangeFrom, to: s.dateRangeTo }
       : getDateRangeFromPeriod(s.period),
 });
+
+/** Reports epoch range: unit + startDate/endDate as epoch ms for the real API */
+export const buildReportsEpochPayload = (s: DropdownSelections): { unit: string; startDate: number; endDate: number } => {
+  if (s.period === "custom") {
+    const now = Date.now();
+    return {
+      unit: s.unit,
+      startDate: s.dateRangeFrom ? new Date(s.dateRangeFrom + "T00:00:00").getTime() : now - 30 * 24 * 60 * 60 * 1000,
+      endDate:   s.dateRangeTo   ? new Date(s.dateRangeTo   + "T23:59:59").getTime() : now,
+    };
+  }
+  const { startDate, endDate } = periodToTimestamps(s.period);
+  return { unit: s.unit, startDate, endDate };
+};
 
 // ─── Slice state ──────────────────────────────────────────────────────────────
 interface DropdownState {

@@ -12,6 +12,7 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage/SettingsPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage/LoginPage"));
 const NotFound = lazy(() => import("@/pages/NotFound/NotFound"));
 const UserManagement = lazy(() => import("@/pages/UserManagement/UserManagement"));
+const BlendTrackerPage = lazy(() => import("@/pages/BlendTrackerPage/BlendTrackerPage"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
@@ -79,6 +80,14 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute>
             <UserManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/blend-tracker"
+        element={
+          <ProtectedRoute>
+            <BlendTrackerPage />
           </ProtectedRoute>
         }
       />

@@ -1,5 +1,5 @@
 import "./AppSidebar.css";
-import { LayoutDashboard, Zap, Activity, Bell, FileText, Users } from "lucide-react";
+import { LayoutDashboard, Zap, Activity, Bell, FileText, Users, FlaskConical } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const NAV_ITEMS = [
@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { title: "Process Analysis", url: "/process", icon: Activity },
   { title: "Alerts", url: "/alerts", icon: Bell },
   { title: "Reports", url: "/reports", icon: FileText },
+  { title: "Blend Tracker", url: "/blend-tracker", icon: FlaskConical },
   { title: "User Management", url: "/user-management", icon: Users },
 ];
 

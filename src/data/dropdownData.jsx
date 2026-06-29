@@ -149,6 +149,9 @@ const machineToBlendMapping = Object.fromEntries(
   RAW.machines.map((m) => [m.name, [...ALL_BLENDS]])
 );
 
+// Machine name → numeric ID lookup (used by blend tracker to resolve machineId for API calls)
+const machineIdMap = Object.fromEntries(RAW.machines.map((m) => [m.name, m.id]));
+
 // Asset hierarchy tree (unit → line → machine)
 const assetHierarchy = Object.entries(RAW.hierarchy).map(([unit, lines]) => ({
   id: unit, label: unit,
@@ -167,9 +170,10 @@ const DROPDOWN_DATA = {
   common: {
     units:      UNITS,
     lines:      LINES,
-    machines:   MACHINES,
-    families:   ALL_BLENDS,
-    parameters: PARAMETERS,
+    machines:     MACHINES,
+    machineIdMap: machineIdMap,
+    families:     ALL_BLENDS,
+    parameters:   PARAMETERS,
 
     shifts: [
       { value: "all",    label: "All Shifts", time: "" },

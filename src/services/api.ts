@@ -111,8 +111,11 @@ function buildDropdownCommon(raw: any) {
 
   // Machine → Blends (all machines carry the full blend list)
   const machineToBlendMapping: Record<string, any[]> = {};
+  const machineIdMap: Record<string, number> = {};
   for (const m of raw.machines) {
     machineToBlendMapping[m.name] = [...families];
+    const id = m.id ?? m.machineId;
+    if (id !== undefined && id !== null) machineIdMap[m.name] = Number(id);
   }
 
   // Asset hierarchy tree
@@ -131,6 +134,7 @@ function buildDropdownCommon(raw: any) {
     unitLineToMachineMapping,
     unitToParamMapping,
     machineToBlendMapping,
+    machineIdMap,
     assetHierarchy,
     shifts:      DROPDOWN_DATA.common.shifts,
     severity:    DROPDOWN_DATA.common.severity,
@@ -223,6 +227,39 @@ export interface AlertsResponse {
   items: AlertApiItem[];
 }
 
+export interface AcknowledgeAlertResponse {
+  alertId: number;
+  isAcknowledged: boolean;
+  acknowledgedBy: string;
+  acknowledgedAt: string;
+}
+
+// ─── Reports Types ────────────────────────────────────────────────────────────
+
+export interface EnergyReportItem {
+  timestamp: string;
+  feederName: string;
+  consumption: number;
+  cost: number;
+}
+
+export interface AlertReportItem {
+  timestamp: string;
+  parameter: string;
+  severity: string;
+  status: string;
+  comments: string;
+  acknowledgedBy: string;
+  acknowledgedOn: string;
+}
+
+export interface ProductionReportItem {
+  date: string;
+  outputMSticks: number;
+  energyKWH: number;
+  energyPerUnit: number;
+}
+
 // ─── Alert Rules Types ────────────────────────────────────────────────────────
 
 export interface AlertRuleApi {
@@ -267,6 +304,93 @@ export interface AlertRulePayload {
   shiftNo?: number | null;
   shiftSummaryRecipients?: string;
   isEnabled: boolean;
+}
+
+// ─── Moisture / Blend Override Types ─────────────────────────────────────────
+
+export interface MoisturePosition {
+  machineId: number;
+  blendId: number | null;
+  blendName: string;
+  source: 'Auto' | 'Manual' | 'Unknown';
+  since: string | null;
+}
+
+export interface BlendRunLog {
+  id: number;
+  blendName: string;
+  blendId: number;
+  startTime: string;
+  endTime: string | null;
+  machine: string;
+  machineId: number;
+  overrideStatus?: boolean;
+}
+
+// ─── Sensor Target Types ──────────────────────────────────────────────────────
+
+export interface SensorTarget {
+  parameterType: string;
+  lsl: number;
+  usl: number;
+  target: number;
+}
+
+// ─── Tariff Types ─────────────────────────────────────────────────────────────
+
+export interface TariffBand {
+  bandId: number;
+  tariffMasterId: number;
+  bandName: "Normal" | "Peak" | "OffPeak" | "HalfPeak";
+  startHour: number;
+  endHour: number;
+  ratePerKWH: number;
+  timeRange: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
+export interface TariffMaster {
+  tariffID: number;
+  tariffCode: string;
+  tariffType: string;
+  ratePerKWH: number;
+  fixedCharges: number;
+  dutyChargePerKWH: number;
+  startDate: string;
+  endDate: string | null;
+  isActive: boolean;
+  bands: TariffBand[];
+}
+
+export interface CreateTariffPayload {
+  tariffCode: string;
+  tariffType: string;
+  ratePerKWH: number;
+  fixedCharges: number;
+  dutyChargePerKWH: number;
+  startDate: string;
+  endDate: string | null;
+  closeActiveMaster: boolean;
+  bands: { bandName: string; startHour: number; endHour: number; ratePerKWH: number }[];
+}
+
+export interface UpdateTariffPayload {
+  tariffCode: string;
+  tariffType: string;
+  ratePerKWH: number;
+  fixedCharges: number;
+  dutyChargePerKWH: number;
+  startDate: string;
+  endDate: string | null;
+  bands: { bandName: string; startHour: number; endHour: number; ratePerKWH: number }[];
+}
+
+export interface TariffBandPayload {
+  bandName: string;
+  startHour: number;
+  endHour: number;
+  ratePerKWH: number;
 }
 
 // ─── Centralised API Service ──────────────────────────────────────────────────
@@ -511,24 +635,82 @@ export const apiService = {
     return res.data as AlertsResponse;
   },
 
-  // ── Reports ──────────────────────────────────────────────────────────────
-  async fetchReportsData(payload?: ApiPayload) {
-    console.log("[Reports] API Payload:", payload);
-    const { reportTypes, historicalKpis } = PAGE_DATA.reportsPage;
-    return {
-      energyTrend: energyTrendData,
-      equipmentEnergy: equipmentEnergyData,
-      processData,
-      alerts: alertsData,
-      reportTypes,
-      historicalKpis,
-    };
+  async acknowledgeAlert(alertId: number) {
+    const res = await apiClient.post(`/alerts/${alertId}/acknowledge`, {});
+    return res.data as AcknowledgeAlertResponse;
   },
 
-  // ── Settings ─────────────────────────────────────────────────────────────
-  async fetchSettingsData() {
-    const { sections } = PAGE_DATA.settingsPage;
-    return { sections };
+  // ── Reports ──────────────────────────────────────────────────────────────
+  async fetchReportData(params: {
+    reportName: string;
+    unit: string;
+    startDate: number;
+    endDate: number;
+    parameter?: string;
+  }) {
+    const { reportName, unit, startDate, endDate, parameter } = params;
+    const p: Record<string, any> = { reportName, unit, startDate, endDate };
+    if (parameter && parameter !== "All") p.parameter = parameter;
+    const res = await apiClient.get("/reports", { params: p });
+    return res.data;
+  },
+
+  async downloadReport(params: {
+    reportName: string;
+    unit: string;
+    startDate: number;
+    endDate: number;
+    parameter?: string;
+  }) {
+    const { reportName, unit, startDate, endDate, parameter } = params;
+    const p: Record<string, any> = { reportName, unit, startDate, endDate };
+    if (parameter && parameter !== "All") p.parameter = parameter;
+    const res = await apiClient.get("/reports/download", { params: p, responseType: "blob" });
+    return res.data as Blob;
+  },
+
+  // ── Moisture / Blend Override ─────────────────────────────────────────────
+  async fetchMoisturePositions(params?: { unit?: string; line?: string }) {
+    const res = await apiClient.get("/moisture/positions", { params });
+    return res.data as MoisturePosition[];
+  },
+
+  async fetchBlendRunLogs(params?: { unit?: string; machine?: string }) {
+    const res = await apiClient.get("/moisture/blend-run", { params });
+    return res.data as BlendRunLog[];
+  },
+
+  async addBlendRunLog(payload: {
+    machineId: number;
+    blendId: number;
+    blendName: string;
+    startDate: string;
+    endDate?: string;
+    overrideStatus?: boolean;
+  }) {
+    const res = await apiClient.post("/moisture/blend-run", payload);
+    return res.data;
+  },
+
+  async applyBlendOverride(machineId: number, payload: { blendId: number; blendName: string }) {
+    const res = await apiClient.put(`/moisture/blend-run/${machineId}`, payload);
+    return res.data;
+  },
+
+  async cancelBlendOverride(machineId: number) {
+    const res = await apiClient.delete(`/moisture/blend-run/${machineId}/manual`);
+    return res.data;
+  },
+
+  // ── Settings — Sensor Targets ─────────────────────────────────────────────
+  async fetchSensorTargets() {
+    const res = await apiClient.get("/sensor/targets");
+    return res.data as SensorTarget[];
+  },
+
+  async saveSensorTargets(payload: SensorTarget[]) {
+    const res = await apiClient.put("/sensor/targets", payload);
+    return res.data;
   },
 
   // ── Blend Configurator ────────────────────────────────────────────────────
@@ -628,6 +810,58 @@ export const apiService = {
 
   async deleteAlertRule(id: number) {
     const res = await apiClient.delete(`/alert-rules/${id}`);
+    return res.data as { message: string };
+  },
+
+  // ── Tariff Master ─────────────────────────────────────────────────────────
+  async fetchAllTariffs() {
+    const res = await apiClient.get("/tariff");
+    return res.data as TariffMaster[];
+  },
+
+  async fetchActiveTariff() {
+    const res = await apiClient.get("/tariff/active");
+    return res.data as TariffMaster;
+  },
+
+  async fetchTariffById(id: number) {
+    const res = await apiClient.get(`/tariff/${id}`);
+    return res.data as TariffMaster;
+  },
+
+  async createTariff(payload: CreateTariffPayload) {
+    const res = await apiClient.post("/tariff", payload);
+    return res.data as { tariffID: number; message: string };
+  },
+
+  async updateTariff(id: number, payload: UpdateTariffPayload) {
+    const res = await apiClient.put(`/tariff/${id}`, payload);
+    return res.data as { message: string };
+  },
+
+  async deleteTariff(id: number) {
+    const res = await apiClient.delete(`/tariff/${id}`);
+    return res.data as { message: string };
+  },
+
+  // ── Tariff Bands ─────────────────────────────────────────────────────────
+  async fetchTariffBands(tariffId: number) {
+    const res = await apiClient.get(`/tariff/${tariffId}/bands`);
+    return res.data as TariffBand[];
+  },
+
+  async addTariffBand(tariffId: number, payload: TariffBandPayload) {
+    const res = await apiClient.post(`/tariff/${tariffId}/bands`, payload);
+    return res.data as TariffBand;
+  },
+
+  async updateTariffBand(tariffId: number, bandId: number, payload: TariffBandPayload) {
+    const res = await apiClient.put(`/tariff/${tariffId}/bands/${bandId}`, payload);
+    return res.data as TariffBand;
+  },
+
+  async deleteTariffBand(tariffId: number, bandId: number) {
+    const res = await apiClient.delete(`/tariff/${tariffId}/bands/${bandId}`);
     return res.data as { message: string };
   },
 };

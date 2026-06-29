@@ -6,21 +6,21 @@ import Loader from "@/components/Loader/Loader";
 import { motion } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
 import {
-  fetchReportsData,
+  fetchReportData,
   selectReportsLoading,
   selectReportsError,
-  selectReportsEnergyTrend,
-  selectReportsEquipmentEnergy,
-  selectReportsProcessData,
-  selectReportsAlerts,
+  selectEnergyReportItems,
+  selectAlertReportItems,
+  selectProductionReportItems,
 } from "@/redux/slices/reportsSlice";
 import {
   setDropdownSelection,
   resetPageSelections,
   selectDropdownSelections,
   selectDropdownData,
-  buildReportsPayload,
+  buildReportsEpochPayload,
 } from "@/redux/slices/dropdownSlice";
+import { apiService } from "@/services/api";
 import {
   FileText, CalendarIcon, Search, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2,
 } from "lucide-react";
@@ -49,28 +49,31 @@ const statusClass = (status: string) =>
     ? "status-critical"
     : "status-warning";
 
+const REPORT_NAME_MAP: Record<ReportType, string | null> = {
+  energy: "energy",
+  alerts: "alerts",
+  production: "production",
+  process: null,
+};
+
 const ReportsPage = () => {
   const dispatch = useAppDispatch();
-  const loading         = useAppSelector(selectReportsLoading);
-  const error           = useAppSelector(selectReportsError);
-  const energyTrendData = useAppSelector(selectReportsEnergyTrend);
-  const equipmentData   = useAppSelector(selectReportsEquipmentEnergy);
-  const processData     = useAppSelector(selectReportsProcessData);
-  const alertsData      = useAppSelector(selectReportsAlerts);
-  const selections      = useAppSelector(selectDropdownSelections);
-  const dropdownData    = useAppSelector(selectDropdownData);
+  const loading          = useAppSelector(selectReportsLoading);
+  const error            = useAppSelector(selectReportsError);
+  const energyItems      = useAppSelector(selectEnergyReportItems);
+  const alertItems       = useAppSelector(selectAlertReportItems);
+  const productionItems  = useAppSelector(selectProductionReportItems);
+  const selections       = useAppSelector(selectDropdownSelections);
+  const dropdownData     = useAppSelector(selectDropdownData);
 
-  // Page-level display state
   const [reportType, setReportType] = useState<ReportType>("energy");
   const [startDate, setStartDate]   = useState<Date | undefined>();
   const [endDate, setEndDate]       = useState<Date | undefined>();
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage]             = useState(1);
   const [exporting, setExporting]   = useState(false);
-  // Page-level parameter filter (not global)
   const [filterParam, setFilterParam] = useState("All");
 
-  // Resolve option lists from DROPDOWN_DATA
   const unitOpts   = (dropdownData?.common?.units      ?? []) as { value: string; label: string }[];
   const familyOpts = (dropdownData?.common?.families   ?? []) as { value: string; label: string }[];
   const shiftOpts  = (dropdownData?.common?.shifts     ?? []) as { value: string; label: string }[];
@@ -81,7 +84,6 @@ const ReportsPage = () => {
       : (dropdownData?.common?.parameters ?? [])
   ) as { value: string; label: string }[];
 
-  // Line options cascade from selected unit
   const unitToLineMap = (dropdownData?.common?.unitToLineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
   const lineOpts = (
     selections.unit && unitToLineMap[selections.unit]
@@ -89,7 +91,6 @@ const ReportsPage = () => {
       : (dropdownData?.common?.lines ?? [])
   ) as { value: string; label: string }[];
 
-  // Machine options cascade from selected unit + line (unit-aware)
   const unitLineToMachineMap = (dropdownData?.common?.unitLineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
   const lineToMachineMap     = (dropdownData?.common?.lineToMachineMapping     ?? {}) as Record<string, { value: string; label: string }[]>;
   const machineOpts = (
@@ -105,7 +106,6 @@ const ReportsPage = () => {
 
   const period = selections.period as PeriodOption;
 
-  // Sync custom date range back into Redux when user picks dates
   useEffect(() => {
     if (period === "custom" && startDate)
       dispatch(setDropdownSelection({ key: "dateRangeFrom", value: format(startDate, "yyyy-MM-dd") }));
@@ -116,7 +116,6 @@ const ReportsPage = () => {
       dispatch(setDropdownSelection({ key: "dateRangeTo", value: format(endDate, "yyyy-MM-dd") }));
   }, [dispatch, period, endDate]);
 
-  // Auto-select first parameter when unit changes
   useEffect(() => {
     if (!dropdownData) return;
     const first = paramOpts[0]?.value;
@@ -124,7 +123,6 @@ const ReportsPage = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selections.unit, dropdownData]);
 
-  // Reset this page's dropdowns once dropdown data is available
   useEffect(() => {
     if (!dropdownData) return;
     const firstUnit = unitOpts[0]?.value ?? "PMD";
@@ -136,115 +134,122 @@ const ReportsPage = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, dropdownData]);
 
+  // Fetch active report on tab/filter/period/unit change
   useEffect(() => {
-    dispatch(fetchReportsData(buildReportsPayload(selections)));
+    const reportName = REPORT_NAME_MAP[reportType];
+    if (!reportName || !selections.unit) return;
+    const { unit, startDate: sd, endDate: ed } = buildReportsEpochPayload(selections);
+    dispatch(fetchReportData({
+      reportName,
+      unit,
+      startDate: sd,
+      endDate: ed,
+      parameter: filterParam,
+    }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, selections.unit, selections.line, selections.machine, selections.family, selections.shift, selections.period]);
+  }, [dispatch, reportType, selections.unit, selections.period, selections.dateRangeFrom, selections.dateRangeTo, filterParam]);
 
   const energyTableData = useMemo(() => {
-    let data = equipmentData.map((eq) => ({
-      timestamp: "2026-03-10 14:00",
-      machine: eq.equipment,
-      line: eq.line,
-      consumption: eq.consumption,
-      cost: eq.cost,
+    let data = energyItems.map((item) => ({
+      timestamp:  item.timestamp,
+      feederName: item.feederName,
+      consumption: item.consumption,
+      cost: item.cost,
     }));
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      data = data.filter((d) => d.machine.toLowerCase().includes(q) || d.line.toLowerCase().includes(q));
+      data = data.filter((d) => d.feederName.toLowerCase().includes(q) || d.timestamp.toLowerCase().includes(q));
     }
     return data;
-  }, [equipmentData, searchQuery]);
-
-  const processTableData = useMemo(() => {
-    let data = processData.map((d) => ({
-      timestamp: format(new Date(d.timestamp), "yyyy-MM-dd HH:mm"),
-      parameter: "Moisture",
-      value: d.moisture,
-      lsl: d.moistureLSL,
-      usl: d.moistureUSL,
-      status: d.moisture >= d.moistureLSL && d.moisture <= d.moistureUSL ? "Normal" : d.moisture > d.moistureUCL || d.moisture < d.moistureLCL ? "Critical" : "Warning",
-    }));
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      data = data.filter((d) => d.parameter.toLowerCase().includes(q) || d.status.toLowerCase().includes(q));
-    }
-    return data;
-  }, [processData, searchQuery]);
+  }, [energyItems, searchQuery]);
 
   const alertsTableData = useMemo(() => {
-    let data = alertsData.map((a) => ({
-      timestamp: a.timestamp,
-      parameter: a.parameter,
-      severity: a.severity,
-      status: a.acknowledged ? "Acknowledged" : "Active",
-      comment: a.acknowledgedComment || "—",
+    let data = alertItems.map((item) => ({
+      timestamp:      item.timestamp,
+      parameter:      item.parameter,
+      severity:       item.severity,
+      status:         item.status,
+      comments:       item.comments,
+      acknowledgedBy: item.acknowledgedBy,
+      acknowledgedOn: item.acknowledgedOn,
     }));
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       data = data.filter((d) => d.parameter.toLowerCase().includes(q) || d.severity.toLowerCase().includes(q));
     }
     return data;
-  }, [alertsData, searchQuery]);
+  }, [alertItems, searchQuery]);
 
   const productionTableData = useMemo(() => {
-    let data = energyTrendData.map((d, i) => ({
-      timestamp: `2026-03-10 ${d.time}`,
-      production: Math.round(180 + (i % 10) * 4),
-      consumption: d.actual,
-      energyPerUnit: +(d.actual / (180 + i * 0.5)).toFixed(2),
+    let data = productionItems.map((item) => ({
+      date:          item.date,
+      outputMSticks: item.outputMSticks,
+      energyKWH:     item.energyKWH,
+      energyPerUnit: item.energyPerUnit,
     }));
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      data = data.filter((d) => d.timestamp.toLowerCase().includes(q));
+      data = data.filter((d) => d.date.toLowerCase().includes(q));
     }
     return data;
-  }, [energyTrendData, searchQuery]);
+  }, [productionItems, searchQuery]);
 
   const currentTableData =
     reportType === "energy"     ? energyTableData :
-    reportType === "process"    ? processTableData :
+    reportType === "alerts"     ? alertsTableData :
     reportType === "production" ? productionTableData :
-    alertsTableData;
+    [];
 
   const totalPages = Math.max(1, Math.ceil(currentTableData.length / PAGE_SIZE));
   const pagedData  = currentTableData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const getFileName = useCallback(() => {
-    const typeLabel  = reportType.charAt(0).toUpperCase() + reportType.slice(1);
-    const unitPart   = selections.unit ? `_${selections.unit.replace(/\s/g, "")}` : "";
-    const linePart   = selections.line ? `_${selections.line.replace(/\s/g, "")}` : "";
-    const datePart   = `_${format(new Date(), "yyyyMMdd")}`;
-    return `${typeLabel}Report${unitPart}${linePart}${datePart}`;
-  }, [reportType, selections.unit, selections.line]);
+    const typeLabel = reportType.charAt(0).toUpperCase() + reportType.slice(1);
+    const unitPart  = selections.unit ? `_${selections.unit.replace(/\s/g, "")}` : "";
+    const datePart  = `_${format(new Date(), "yyyyMMdd")}`;
+    return `${typeLabel}Report${unitPart}${datePart}`;
+  }, [reportType, selections.unit]);
 
-  const buildCSVContent = useCallback(() => {
-    if (reportType === "energy") {
-      return ["Timestamp,Machine,Line,Consumption (kWh),Cost (₹)", ...energyTableData.map((d) => `${d.timestamp},${d.machine},${d.line},${d.consumption},${d.cost}`)].join("\n");
-    } else if (reportType === "process") {
-      return ["Timestamp,Parameter,Value,LSL,USL,Status", ...processTableData.map((d) => `${d.timestamp},${d.parameter},${d.value},${d.lsl},${d.usl},${d.status}`)].join("\n");
-    } else if (reportType === "production") {
-      return ["Timestamp,Production (units),Consumption (kWh),Energy/Unit", ...productionTableData.map((d) => `${d.timestamp},${d.production},${d.consumption},${d.energyPerUnit}`)].join("\n");
-    } else {
-      return ["Timestamp,Parameter,Severity,Status,Comment", ...alertsTableData.map((d) => `${d.timestamp},${d.parameter},${d.severity},${d.status},${d.comment}`)].join("\n");
-    }
-  }, [reportType, energyTableData, processTableData, alertsTableData, productionTableData]);
-
-  const handleExportExcel = useCallback(() => {
+  const handleDownloadExcel = useCallback(async () => {
+    const reportName = REPORT_NAME_MAP[reportType];
+    if (!reportName) return;
     setExporting(true);
-    setTimeout(() => {
-      const csv  = buildCSVContent();
-      const blob = new Blob([csv], { type: "application/vnd.ms-excel" });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
+    try {
+      const { unit, startDate: sd, endDate: ed } = buildReportsEpochPayload(selections);
+      const blob = await apiService.downloadReport({
+        reportName,
+        unit,
+        startDate: sd,
+        endDate: ed,
+        parameter: filterParam,
+      });
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement("a");
       a.href     = url;
       a.download = `${getFileName()}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success("Report downloaded", { description: `${getFileName()}.xlsx` });
+    } catch {
+      toast.error("Download failed");
+    } finally {
       setExporting(false);
-      toast.success("Report downloaded successfully", { description: `${getFileName()}.xlsx` });
-    }, 600);
-  }, [buildCSVContent, getFileName]);
+    }
+  }, [reportType, selections, filterParam, getFileName]);
+
+  const buildCSVContent = useCallback(() => {
+    if (reportType === "energy") {
+      return ["Timestamp,Feeder Name,Consumption (kWh),Cost (₹)",
+        ...energyTableData.map((d) => `${d.timestamp},${d.feederName},${d.consumption},${d.cost}`)].join("\n");
+    } else if (reportType === "alerts") {
+      return ["Timestamp,Parameter,Severity,Status,Comments,Acknowledged By,Acknowledged On",
+        ...alertsTableData.map((d) => `${d.timestamp},${d.parameter},${d.severity},${d.status},${d.comments},${d.acknowledgedBy},${d.acknowledgedOn}`)].join("\n");
+    } else if (reportType === "production") {
+      return ["Date,Output (M-Sticks),Energy (kWh),Energy/Unit",
+        ...productionTableData.map((d) => `${d.date},${d.outputMSticks},${d.energyKWH},${d.energyPerUnit}`)].join("\n");
+    }
+    return "";
+  }, [reportType, energyTableData, alertsTableData, productionTableData]);
 
   const handleExportPDF = useCallback(() => {
     setExporting(true);
@@ -252,7 +257,7 @@ const ReportsPage = () => {
       const csv      = buildCSVContent();
       const csvLines = csv.split("\n");
       const header   = csvLines[0];
-      const content  = `${reportType.toUpperCase()} REPORT\n\nFilters: Unit=${selections.unit}, Line=${selections.line}, Machine=${selections.machine}, Family=${selections.family}, Shift=${selections.shift}, Period=${periodLabels[period] ?? period}\nGenerated: ${format(new Date(), "dd MMM yyyy HH:mm")}\n\n${header}\n${"─".repeat(80)}\n${csvLines.slice(1).join("\n")}`;
+      const content  = `${reportType.toUpperCase()} REPORT\n\nFilters: Unit=${selections.unit}, Period=${periodLabels[period] ?? period}\nGenerated: ${format(new Date(), "dd MMM yyyy HH:mm")}\n\n${header}\n${"─".repeat(80)}\n${csvLines.slice(1).join("\n")}`;
       const blob     = new Blob([content], { type: "application/pdf" });
       const url      = URL.createObjectURL(blob);
       const a        = document.createElement("a");
@@ -261,7 +266,7 @@ const ReportsPage = () => {
       a.click();
       URL.revokeObjectURL(url);
       setExporting(false);
-      toast.success("Report downloaded successfully", { description: `${getFileName()}.pdf` });
+      toast.success("Report downloaded", { description: `${getFileName()}.pdf` });
     }, 800);
   }, [buildCSVContent, getFileName, reportType, selections, period]);
 
@@ -277,7 +282,7 @@ const ReportsPage = () => {
           <Button variant="outline" size="sm" className="reports-btn-sm" onClick={handleExportPDF} disabled={exporting}>
             {exporting ? <Loader2 className="animate-spin" /> : <FileText />}PDF
           </Button>
-          <Button variant="outline" size="sm" className="reports-btn-sm" onClick={handleExportExcel} disabled={exporting}>
+          <Button variant="outline" size="sm" className="reports-btn-sm" onClick={handleDownloadExcel} disabled={exporting || !REPORT_NAME_MAP[reportType]}>
             {exporting ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />}Excel
           </Button>
         </div>
@@ -291,7 +296,17 @@ const ReportsPage = () => {
               ))}
             </tr>
           </thead>
-          <tbody>{pagedData.map((d, i) => renderRow(d, i))}</tbody>
+          <tbody>
+            {pagedData.length === 0 ? (
+              <tr>
+                <td colSpan={headers.length} className="reports-table-empty">
+                  No data found
+                </td>
+              </tr>
+            ) : (
+              pagedData.map((d, i) => renderRow(d, i))
+            )}
+          </tbody>
         </table>
       </div>
       <div className="reports-pager">
@@ -304,14 +319,22 @@ const ReportsPage = () => {
     </motion.div>
   );
 
-  if (error)   return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
   return (
     <DashboardLayout>
-      <div className="page-header-row">
-        <h2 className="page-title">Reports</h2>
-        <div className="reports-filters">
-          {/* Global filters — stored in Redux */}
+      <h2 className="page-title">Reports</h2>
+
+      <Tabs value={reportType} onValueChange={(v) => { setReportType(v as ReportType); setPage(1); setSearchQuery(""); }}>
+
+        <TabsList className="reports-tabs-list">
+          <TabsTrigger value="energy">Energy Reports</TabsTrigger>
+          <TabsTrigger value="process">Process (SPC) Reports</TabsTrigger>
+          <TabsTrigger value="alerts">Alerts Reports</TabsTrigger>
+          <TabsTrigger value="production">Production Reports</TabsTrigger>
+        </TabsList>
+
+        {/* Filters row — below the tabs */}
+        <div className="reports-filters-row">
           {[
             { label: "Unit",    value: selections.unit,    setter: (v: string) => { const fl = unitToLineMap[v]?.[0]?.value ?? ""; const fm = lineToMachineMap[fl]?.[0]?.value ?? ""; set("unit")(v); set("line")(fl); set("machine")(fm); }, opts: unitOpts.length   ? unitOpts   : [{ value: "PMD", label: "PMD" }] },
             { label: "Line",    value: selections.line,    setter: (v: string) => { set("line")(v); set("machine")(lineToMachineMap[v]?.[0]?.value ?? ""); }, opts: lineOpts.length   ? lineOpts   : [{ value: "All", label: "All" }] },
@@ -325,17 +348,15 @@ const ReportsPage = () => {
             </div>
           ))}
 
-          {/* Parameter — page-level display filter */}
           <div className="reports-filter">
             <label className="reports-filter-label">Parameter</label>
             <Dropdown
               value={filterParam}
               onValueChange={(v) => { setFilterParam(v); setPage(1); }}
-              options={paramOpts.length ? paramOpts : ["All", "Energy", "Moisture", "Humidity"]}
+              options={paramOpts.length ? paramOpts : ["All", "Temperature", "Humidity"]}
             />
           </div>
 
-          {/* Period — stored in Redux */}
           <div className="reports-filter">
             <label className="reports-filter-label">Period</label>
             <Dropdown
@@ -381,78 +402,70 @@ const ReportsPage = () => {
             </>
           )}
         </div>
-      </div>
 
-      {loading ? <Loader message="Loading Reports…" /> : (
-      <Tabs value={reportType} onValueChange={(v) => { setReportType(v as ReportType); setPage(1); setSearchQuery(""); }}>
-        <TabsList>
-          <TabsTrigger value="energy">Energy Reports</TabsTrigger>
-          <TabsTrigger value="process">Process (SPC) Reports</TabsTrigger>
-          <TabsTrigger value="alerts">Alerts Reports</TabsTrigger>
-          <TabsTrigger value="production">Production Reports</TabsTrigger>
-        </TabsList>
+        {/* Tab content */}
+        {loading ? <Loader message="Loading Reports…" /> : error ? (
+          <div className="chart-container alerts-empty">
+            Failed to load report data. Please adjust the filters and try again.
+          </div>
+        ) : (
+          <>
+            <TabsContent value="energy">
+              {renderTable(
+                [{ label: "Timestamp" }, { label: "Feeder Name" }, { label: "Consumption (kWh)", align: "right" }, { label: "Cost (₹)", align: "right" }],
+                (d: any, i: number) => (
+                  <tr key={i}>
+                    <td className="mono">{d.timestamp}</td>
+                    <td className="medium">{d.feederName}</td>
+                    <td className="mono-strong right">{d.consumption?.toLocaleString()}</td>
+                    <td className="mono-strong right">₹{d.cost?.toLocaleString()}</td>
+                  </tr>
+                )
+              )}
+            </TabsContent>
 
-        <TabsContent value="energy">
-          {renderTable(
-            [{ label: "Timestamp" }, { label: "Machine" }, { label: "Line" }, { label: "Consumption (kWh)", align: "right" }, { label: "Cost (₹)", align: "right" }],
-            (d: any, i: number) => (
-              <tr key={i}>
-                <td className="mono">{d.timestamp}</td>
-                <td className="medium">{d.machine}</td>
-                <td>{d.line}</td>
-                <td className="mono-strong right">{d.consumption?.toLocaleString()}</td>
-                <td className="mono-strong right">₹{d.cost?.toLocaleString()}</td>
-              </tr>
-            )
-          )}
-        </TabsContent>
+            <TabsContent value="process">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container">
+                <div className="alerts-empty">No process report data available</div>
+              </motion.div>
+            </TabsContent>
 
-        <TabsContent value="process">
-          {renderTable(
-            [{ label: "Timestamp" }, { label: "Parameter" }, { label: "Value", align: "right" }, { label: "LSL", align: "right" }, { label: "USL", align: "right" }, { label: "Status" }],
-            (d: any, i: number) => (
-              <tr key={i}>
-                <td className="mono">{d.timestamp}</td>
-                <td className="medium">{d.parameter}</td>
-                <td className="mono-strong right">{d.value}</td>
-                <td className="mono-strong right">{d.lsl}</td>
-                <td className="mono-strong right">{d.usl}</td>
-                <td><span className={statusClass(d.status)}>{d.status}</span></td>
-              </tr>
-            )
-          )}
-        </TabsContent>
+            <TabsContent value="alerts">
+              {renderTable(
+                [
+                  { label: "Timestamp" }, { label: "Parameter" }, { label: "Severity" },
+                  { label: "Status" }, { label: "Comments" }, { label: "Acknowledged By" }, { label: "Acknowledged On" },
+                ],
+                (d: any, i: number) => (
+                  <tr key={i}>
+                    <td className="mono">{d.timestamp}</td>
+                    <td className="medium">{d.parameter}</td>
+                    <td><span className={statusClass(d.severity)}>{d.severity}</span></td>
+                    <td><span className={statusClass(d.status)}>{d.status}</span></td>
+                    <td className="mono">{d.comments || "—"}</td>
+                    <td>{d.acknowledgedBy || "—"}</td>
+                    <td className="mono">{d.acknowledgedOn || "—"}</td>
+                  </tr>
+                )
+              )}
+            </TabsContent>
 
-        <TabsContent value="alerts">
-          {renderTable(
-            [{ label: "Timestamp" }, { label: "Parameter" }, { label: "Severity" }, { label: "Status" }, { label: "Comment" }],
-            (d: any, i: number) => (
-              <tr key={i}>
-                <td className="mono">{d.timestamp}</td>
-                <td className="medium">{d.parameter}</td>
-                <td><span className={statusClass(d.severity)}>{d.severity}</span></td>
-                <td><span className={statusClass(d.status)}>{d.status}</span></td>
-                <td className="mono">{d.comment}</td>
-              </tr>
-            )
-          )}
-        </TabsContent>
-
-        <TabsContent value="production">
-          {renderTable(
-            [{ label: "Timestamp" }, { label: "Output", align: "right" }, { label: "Energy (kWh)", align: "right" }, { label: "Energy/Unit", align: "right" }],
-            (d: any, i: number) => (
-              <tr key={i}>
-                <td className="mono">{d.timestamp}</td>
-                <td className="mono-strong right">{d.production}</td>
-                <td className="mono-strong right">{d.consumption?.toLocaleString()}</td>
-                <td className="mono-strong right">{d.energyPerUnit}</td>
-              </tr>
-            )
-          )}
-        </TabsContent>
+            <TabsContent value="production">
+              {renderTable(
+                [{ label: "Date" }, { label: "Output (M-Sticks)", align: "right" }, { label: "Energy (kWh)", align: "right" }, { label: "Energy/Unit", align: "right" }],
+                (d: any, i: number) => (
+                  <tr key={i}>
+                    <td className="mono">{d.date}</td>
+                    <td className="mono-strong right">{d.outputMSticks?.toLocaleString()}</td>
+                    <td className="mono-strong right">{d.energyKWH?.toLocaleString()}</td>
+                    <td className="mono-strong right">{d.energyPerUnit}</td>
+                  </tr>
+                )
+              )}
+            </TabsContent>
+          </>
+        )}
       </Tabs>
-      )}
     </DashboardLayout>
   );
 };

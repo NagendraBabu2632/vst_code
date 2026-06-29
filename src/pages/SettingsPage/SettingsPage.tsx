@@ -20,7 +20,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { apiService } from "@/services/api";
-import type { AlertRuleApi } from "@/services/api";
+import type { AlertRuleApi, TariffMaster, TariffBand } from "@/services/api";
 
 const parameters = ["Moisture S1", "Moisture S2", "Moisture S3", "Moisture S4"];
 
@@ -31,9 +31,6 @@ const currentYear = new Date().getFullYear();
 const years = [currentYear - 1, currentYear, currentYear + 1];
 
 interface MoistureSpec { family: string; year: number; quarter: string; lsl: number; usl: number; target: number; updatedAt: string; }
-type TariffType = "Fixed" | "Slab-based" | "ToD";
-interface ToDSlot { label: "Peak" | "Off-Peak"; startTime: string; endTime: string; rate: number; }
-interface TariffEntry { id: string; type: TariffType; rate: number; fixedCharges: number; startDate: Date; endDate?: Date; todSlots?: ToDSlot[]; }
 
 const SettingsPage = () => {
   const [blends, setBlends] = useState<Blend[]>([]);
@@ -58,72 +55,13 @@ const SettingsPage = () => {
   const [prodColumns, setProdColumns] = useState<string[]>([]);
   const [prodUploadResult, setProdUploadResult] = useState<{ message?: string; inserted?: number; updated?: number; errors?: string[] } | null>(null);
 
-  const [tariffs, setTariffs] = useState<TariffEntry[]>([
-    { id: "T-001", type: "Fixed", rate: 8.0, fixedCharges: 1500, startDate: new Date(currentYear, 0, 1), endDate: undefined },
-  ]);
-  const [tariffType, setTariffType] = useState<TariffType>("Fixed");
-  const [tariffRate, setTariffRate] = useState<string>("8.0");
-  const [tariffFixed, setTariffFixed] = useState<string>("1500");
-  const [tariffStart, setTariffStart] = useState<Date | undefined>(new Date());
-  const [tariffEnd, setTariffEnd] = useState<Date | undefined>();
-  const [tariffStartOpen, setTariffStartOpen] = useState(false);
-  const [tariffEndOpen, setTariffEndOpen] = useState(false);
+  const [processTargets, setProcessTargets] = useState<Record<string, { lsl: string; usl: string; target: string }>>({
+    Temperature: { lsl: "27", usl: "35", target: "31" },
+    Humidity: { lsl: "50", usl: "65", target: "58" },
+  });
+  const [processLoading, setProcessLoading] = useState(false);
+  const [processSaving, setProcessSaving] = useState(false);
 
-  const [todSlots, setTodSlots] = useState<ToDSlot[]>([
-    { label: "Peak", startTime: "18:00", endTime: "22:00", rate: 10.0 },
-    { label: "Off-Peak", startTime: "22:00", endTime: "06:00", rate: 6.0 },
-  ]);
-
-  const updateSlot = (idx: number, patch: Partial<ToDSlot>) => {
-    setTodSlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
-  };
-
-  const toMinutes = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
-  const expandRange = (start: string, end: string): Array<[number, number]> => {
-    const s = toMinutes(start); const e = toMinutes(end);
-    if (s === e) return [];
-    if (e > s) return [[s, e]];
-    return [[s, 1440], [0, e]];
-  };
-
-  const validateToD = (): string | null => {
-    for (const s of todSlots) {
-      if (!s.startTime || !s.endTime) return "Each slot needs start and end time";
-      if (isNaN(s.rate) || s.rate <= 0) return `${s.label} rate must be greater than 0`;
-    }
-    const ranges: Array<{ label: string; range: [number, number] }> = [];
-    todSlots.forEach((s) => { expandRange(s.startTime, s.endTime).forEach((r) => ranges.push({ label: s.label, range: r })); });
-    for (let i = 0; i < ranges.length; i++) {
-      for (let j = i + 1; j < ranges.length; j++) {
-        const [a1, a2] = ranges[i].range; const [b1, b2] = ranges[j].range;
-        if (a1 < b2 && b1 < a2) return `Time ranges overlap between ${ranges[i].label} and ${ranges[j].label}`;
-      }
-    }
-    const peak = todSlots.find((s) => s.label === "Peak");
-    const off = todSlots.find((s) => s.label === "Off-Peak");
-    if (peak && off && peak.rate <= off.rate) return "Peak rate must be higher than Off-Peak rate";
-    return null;
-  };
-
-  const addTariff = () => {
-    const fixed = parseFloat(tariffFixed);
-    if (!tariffStart || isNaN(fixed)) { toast.error("Please complete all tariff fields"); return; }
-    let entry: TariffEntry;
-    if (tariffType === "ToD") {
-      const err = validateToD();
-      if (err) { toast.error(err); return; }
-      const avgRate = todSlots.reduce((sum, s) => sum + s.rate, 0) / todSlots.length;
-      entry = { id: `T-${String(tariffs.length + 1).padStart(3, "0")}`, type: "ToD", rate: avgRate, fixedCharges: fixed, startDate: tariffStart, endDate: tariffEnd, todSlots: todSlots.map((s) => ({ ...s })) };
-    } else {
-      const rate = parseFloat(tariffRate);
-      if (isNaN(rate)) { toast.error("Please enter a valid rate"); return; }
-      entry = { id: `T-${String(tariffs.length + 1).padStart(3, "0")}`, type: tariffType, rate, fixedCharges: fixed, startDate: tariffStart, endDate: tariffEnd };
-    }
-    setTariffs([...tariffs, entry]);
-    toast.success("Tariff added");
-  };
-
-  const deleteTariff = (id: string) => { setTariffs(tariffs.filter((t) => t.id !== id)); toast.info("Tariff removed"); };
 
   const [specs, setSpecs] = useState<MoistureSpec[]>([
     { family: "Family A", year: currentYear, quarter: "Q1 (Jan–Mar)", lsl: 11.0, usl: 14.0, target: 12.5, updatedAt: new Date().toISOString().slice(0, 10) },
@@ -310,8 +248,46 @@ const SettingsPage = () => {
   const urlTab = new URLSearchParams(location.search).get("tab");
   const activeTab = urlTab && validTabs.includes(urlTab) ? urlTab : "sku";
 
+  const loadProcessTargets = async () => {
+    setProcessLoading(true);
+    try {
+      const data = await apiService.fetchSensorTargets();
+      const map: Record<string, { lsl: string; usl: string; target: string }> = {};
+      data.forEach(t => { map[t.parameterType] = { lsl: String(t.lsl), usl: String(t.usl), target: String(t.target) }; });
+      setProcessTargets(prev => ({ ...prev, ...map }));
+    } catch {
+      // keep defaults on API failure
+    } finally {
+      setProcessLoading(false);
+    }
+  };
+
+  const saveProcessTargets = async () => {
+    setProcessSaving(true);
+    try {
+      const payload = Object.entries(processTargets).map(([parameterType, vals]) => ({
+        parameterType,
+        lsl: parseFloat(vals.lsl),
+        usl: parseFloat(vals.usl),
+        target: parseFloat(vals.target),
+      }));
+      await apiService.saveSensorTargets(payload);
+      toast.success("Parameters saved");
+      await loadProcessTargets();
+    } catch {
+      toast.error("Failed to save parameters");
+    } finally {
+      setProcessSaving(false);
+    }
+  };
+
+  const updateProcessField = (param: string, field: "lsl" | "usl" | "target", value: string) => {
+    setProcessTargets(prev => ({ ...prev, [param]: { ...prev[param], [field]: value } }));
+  };
+
   useEffect(() => {
     if (activeTab === "sku") loadBlends();
+    if (activeTab === "process") loadProcessTargets();
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -408,155 +384,7 @@ const SettingsPage = () => {
             </motion.div>
           )}
 
-          {activeTab === "tariff" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
-              <div className="settings-section-head"><IndianRupee /><h3 className="settings-section-title">Tariff Settings</h3></div>
-              <p className="settings-section-desc">Tariff is used for cost calculations across Energy dashboards and reports.</p>
-              <Separator />
-
-              <div className="settings-grid-3">
-                <div className="settings-field">
-                  <Label>Tariff Type</Label>
-                  <Dropdown
-                    value={tariffType}
-                    onValueChange={(v) => setTariffType(v as TariffType)}
-                    options={[
-                      { value: "Fixed", label: "Fixed" },
-                      { value: "Slab-based", label: "Slab-Based" },
-                      { value: "ToD", label: "Time-of-Day (ToD)" },
-                    ]}
-                  />
-                </div>
-                {tariffType !== "ToD" && (
-                  <div className="settings-field">
-                    <Label>Rate (₹ per kWh)</Label>
-                    <Input type="number" step="0.01" value={tariffRate} onChange={(e) => setTariffRate(e.target.value)} />
-                  </div>
-                )}
-                <div className="settings-field">
-                  <Label>Fixed Charges (₹)</Label>
-                  <Input type="number" step="1" value={tariffFixed} onChange={(e) => setTariffFixed(e.target.value)} />
-                </div>
-                <div className="settings-field">
-                  <Label>Effective Start Date</Label>
-                  <Popover open={tariffStartOpen} onOpenChange={setTariffStartOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="settings-btn--full-start">
-                        <CalendarIcon className="settings-cal-icon" />
-                        {tariffStart ? format(tariffStart, "dd MMM yyyy") : "Pick date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="popover-content--calendar" align="start">
-                      <Calendar mode="single" selected={tariffStart} onSelect={(d) => { if (d) { setTariffStart(d); setTariffStartOpen(false); } }} initialFocus />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="settings-field">
-                  <Label>Effective End Date <span className="settings-optional-muted">(optional)</span></Label>
-                  <Popover open={tariffEndOpen} onOpenChange={setTariffEndOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="settings-btn--full-start">
-                        <CalendarIcon className="settings-cal-icon" />
-                        {tariffEnd ? format(tariffEnd, "dd MMM yyyy") : "No end date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="popover-content--calendar" align="start">
-                      <Calendar mode="single" selected={tariffEnd} onSelect={(d) => { setTariffEnd(d); setTariffEndOpen(false); }} initialFocus />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="settings-field-flex-end">
-                  <Button onClick={addTariff}><Plus />Add Tariff</Button>
-                </div>
-              </div>
-
-              {tariffType === "ToD" && (
-                <div className="settings-tod-card">
-                  <div className="settings-tod-head">
-                    <div>
-                      <h4 className="settings-tod-title">ToD Charges Configuration</h4>
-                      <p className="settings-tod-hint">Define rate per slot. Peak rate must be higher than Off-Peak. Time ranges cannot overlap.</p>
-                    </div>
-                  </div>
-                  <div className="settings-tod-slots">
-                    {todSlots.map((slot, idx) => (
-                      <div key={slot.label} className="settings-tod-slot">
-                        <div className="settings-tod-slot-field">
-                          <Label className="settings-tod-slot-label">Slot</Label>
-                          <div className="settings-tod-slot-pill">
-                            <Badge variant="outline" className={`${slot.label === "Peak" ? "settings-badge-peak" : "settings-badge-offpeak"} settings-badge-sm`}>
-                              {slot.label} Hours
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="settings-tod-slot-field">
-                          <Label>Start Time</Label>
-                          <Input type="time" value={slot.startTime} onChange={(e) => updateSlot(idx, { startTime: e.target.value })} />
-                        </div>
-                        <div className="settings-tod-slot-field">
-                          <Label>End Time</Label>
-                          <Input type="time" value={slot.endTime} onChange={(e) => updateSlot(idx, { endTime: e.target.value })} />
-                        </div>
-                        <div className="settings-tod-slot-field">
-                          <Label>Rate (₹ per kWh)</Label>
-                          <Input type="number" step="0.01" value={slot.rate} onChange={(e) => updateSlot(idx, { rate: parseFloat(e.target.value) || 0 })} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <Separator />
-
-              <div className="settings-section settings-section--gap-sm">
-                <h4 className="settings-history-head"><History /> Tariff History</h4>
-                <div className="settings-table-wrap">
-                  <table className="settings-table">
-                    <thead>
-                      <tr>
-                        <th className="text-left">ID</th>
-                        <th className="text-left">Type</th>
-                        <th className="text-right">Rate (₹/kWh)</th>
-                        <th className="text-right">Fixed (₹)</th>
-                        <th className="text-left">Start</th>
-                        <th className="text-left">End</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tariffs.map((t) => (
-                        <tr key={t.id}>
-                          <td className="mono">{t.id}</td>
-                          <td><Badge variant="outline" className="settings-badge-sm">{t.type}</Badge></td>
-                          <td className="right mono-strong">
-                            {t.type === "ToD" && t.todSlots ? (
-                              <div className="settings-tod-summary">
-                                {t.todSlots.map((s) => (
-                                  <span key={s.label}>
-                                    <span className="label">{s.label}:</span> {s.startTime}–{s.endTime} @ {s.rate.toFixed(2)}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (t.rate.toFixed(2))}
-                          </td>
-                          <td className="right mono-strong">{t.fixedCharges.toLocaleString()}</td>
-                          <td className="small">{format(t.startDate, "dd MMM yyyy")}</td>
-                          <td className="small">{t.endDate ? format(t.endDate, "dd MMM yyyy") : "—"}</td>
-                          <td className="right">
-                            <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => deleteTariff(t.id)}><Trash2 /></Button>
-                          </td>
-                        </tr>
-                      ))}
-                      {tariffs.length === 0 && (
-                        <tr><td colSpan={7} className="settings-table-empty">No tariffs configured</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </motion.div>
-          )}
+          {activeTab === "tariff" && <TariffSection />}
 
           {activeTab === "moisture-specs" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
@@ -654,26 +482,58 @@ const SettingsPage = () => {
           {activeTab === "process" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
               <div className="settings-section-head"><Gauge /><h3 className="settings-section-title">Process Parameter Configuration</h3></div>
+              <p className="settings-section-desc">Define LSL, USL, and Target for each process parameter. These values drive threshold alerts and process analysis charts.</p>
               <Separator />
 
-              <div className="settings-process-block">
-                <h4 className="settings-process-title">Temperature</h4>
-                <div className="settings-grid-3-cells">
-                  <div className="settings-field"><Label>Target (°C)</Label><Input defaultValue="85" type="number" /></div>
-                  <div className="settings-field"><Label>LSL (°C)</Label><Input defaultValue="75" type="number" /></div>
-                  <div className="settings-field"><Label>USL (°C)</Label><Input defaultValue="95" type="number" /></div>
-                </div>
+              {processLoading ? (
+                <p className="settings-section-desc">Loading…</p>
+              ) : (
+                <>
+                  {[
+                    { key: "Temperature", unit: "°C" },
+                    { key: "Humidity",    unit: "% RH" },
+                  ].map(({ key, unit }, i) => (
+                    <div key={key}>
+                      {i > 0 && <Separator />}
+                      <div className="settings-process-block">
+                        <h4 className="settings-process-title">{key}</h4>
+                        <div className="settings-grid-3-cells">
+                          <div className="settings-field">
+                            <Label>Target ({unit})</Label>
+                            <Input
+                              type="number" step="0.1"
+                              value={processTargets[key]?.target ?? ""}
+                              onChange={e => updateProcessField(key, "target", e.target.value)}
+                            />
+                          </div>
+                          <div className="settings-field">
+                            <Label>LSL ({unit})</Label>
+                            <Input
+                              type="number" step="0.1"
+                              value={processTargets[key]?.lsl ?? ""}
+                              onChange={e => updateProcessField(key, "lsl", e.target.value)}
+                            />
+                          </div>
+                          <div className="settings-field">
+                            <Label>USL ({unit})</Label>
+                            <Input
+                              type="number" step="0.1"
+                              value={processTargets[key]?.usl ?? ""}
+                              onChange={e => updateProcessField(key, "usl", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              <div className="settings-save-row">
+                <Button onClick={saveProcessTargets} disabled={processSaving || processLoading}>
+                  {processSaving ? "Saving…" : "Save Parameters"}
+                </Button>
               </div>
-              <Separator />
-              <div className="settings-process-block">
-                <h4 className="settings-process-title">Humidity</h4>
-                <div className="settings-grid-3-cells">
-                  <div className="settings-field"><Label>Target (% RH)</Label><Input defaultValue="58" type="number" /></div>
-                  <div className="settings-field"><Label>LSL (% RH)</Label><Input defaultValue="50" type="number" /></div>
-                  <div className="settings-field"><Label>USL (% RH)</Label><Input defaultValue="65" type="number" /></div>
-                </div>
-              </div>
-              <div className="settings-save-row"><Button>Save Parameters</Button></div>
             </motion.div>
           )}
 
@@ -810,6 +670,513 @@ const SettingsPage = () => {
           )}
       </div>
     </DashboardLayout>
+  );
+};
+
+// ---------------- Tariff Section ----------------
+
+interface BandDraft {
+  bandId?: number;
+  bandName: "Normal" | "Peak" | "OffPeak" | "HalfPeak";
+  startHour: number;
+  endHour: number;
+  ratePerKWH: string;
+}
+
+const BAND_NAMES: Array<"Normal" | "Peak" | "OffPeak" | "HalfPeak"> = ["Normal", "Peak", "OffPeak", "HalfPeak"];
+const hrLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
+
+const TariffSection = () => {
+  const [tariffs, setTariffs] = useState<TariffMaster[]>([]);
+  const [activeTariff, setActiveTariff] = useState<TariffMaster | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [fCode, setFCode] = useState("");
+  const [fType, setFType] = useState("ToD");
+  const [fRate, setFRate] = useState("");
+  const [fFixed, setFFixed] = useState("");
+  const [fDuty, setFDuty] = useState("0.06");
+  const [fStartDate, setFStartDate] = useState<Date | undefined>();
+  const [fEndDate, setFEndDate] = useState<Date | undefined>();
+  const [fCloseActive, setFCloseActive] = useState(true);
+  const [fStartOpen, setFStartOpen] = useState(false);
+  const [fEndOpen, setFEndOpen] = useState(false);
+
+  const [bands, setBands] = useState<BandDraft[]>([]);
+  const [editingBandIdx, setEditingBandIdx] = useState<number | null>(null);
+  const [bandDraft, setBandDraft] = useState<Partial<BandDraft>>({});
+  const [newBandName, setNewBandName] = useState<BandDraft["bandName"]>("Peak");
+  const [newBandStart, setNewBandStart] = useState("18");
+  const [newBandEnd, setNewBandEnd] = useState("22");
+  const [newBandRate, setNewBandRate] = useState("");
+  const [bandSaving, setBandSaving] = useState(false);
+
+  const loadTariffs = async () => {
+    setLoading(true);
+    try {
+      const [allRes, activeRes] = await Promise.allSettled([
+        apiService.fetchAllTariffs(),
+        apiService.fetchActiveTariff(),
+      ]);
+      if (allRes.status === "fulfilled") setTariffs(allRes.value);
+      else toast.error("Failed to load tariffs");
+      if (activeRes.status === "fulfilled") setActiveTariff(activeRes.value);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadTariffs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openCreate = () => {
+    setEditingId(null);
+    setFCode(""); setFType("ToD"); setFRate(""); setFFixed(""); setFDuty("0.06");
+    setFStartDate(undefined); setFEndDate(undefined); setFCloseActive(true);
+    setBands([]); setEditingBandIdx(null); setNewBandRate("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (t: TariffMaster) => {
+    setEditingId(t.tariffID);
+    setFCode(t.tariffCode);
+    setFType(t.tariffType);
+    setFRate(String(t.ratePerKWH));
+    setFFixed(String(t.fixedCharges));
+    setFDuty(String(t.dutyChargePerKWH));
+    setFStartDate(t.startDate ? new Date(t.startDate) : undefined);
+    setFEndDate(t.endDate ? new Date(t.endDate) : undefined);
+    setBands(t.bands.map(b => ({
+      bandId: b.bandId,
+      bandName: b.bandName,
+      startHour: b.startHour,
+      endHour: b.endHour,
+      ratePerKWH: String(b.ratePerKWH),
+    })));
+    setEditingBandIdx(null); setNewBandRate("");
+    setDialogOpen(true);
+  };
+
+  const saveTariff = async () => {
+    if (!fCode.trim()) { toast.error("Tariff code is required"); return; }
+    const rateNum = parseFloat(fRate);
+    const fixedNum = parseFloat(fFixed);
+    const dutyNum = parseFloat(fDuty) || 0;
+    if (isNaN(rateNum) || rateNum <= 0) { toast.error("Rate must be > 0"); return; }
+    if (isNaN(fixedNum) || fixedNum < 0) { toast.error("Fixed charges must be ≥ 0"); return; }
+    if (!fStartDate) { toast.error("Start date is required"); return; }
+
+    const startDateStr = format(fStartDate, "yyyy-MM-dd");
+    const endDateStr = fEndDate ? format(fEndDate, "yyyy-MM-dd") : null;
+    const bandsPayload = bands.map(b => ({
+      bandName: b.bandName,
+      startHour: b.startHour,
+      endHour: b.endHour,
+      ratePerKWH: parseFloat(b.ratePerKWH) || 0,
+    }));
+
+    setSaving(true);
+    try {
+      if (editingId === null) {
+        await apiService.createTariff({
+          tariffCode: fCode.trim(),
+          tariffType: fType,
+          ratePerKWH: rateNum,
+          fixedCharges: fixedNum,
+          dutyChargePerKWH: dutyNum,
+          startDate: startDateStr,
+          endDate: endDateStr,
+          closeActiveMaster: fCloseActive,
+          bands: bandsPayload,
+        });
+        toast.success("Tariff created");
+      } else {
+        await apiService.updateTariff(editingId, {
+          tariffCode: fCode.trim(),
+          tariffType: fType,
+          ratePerKWH: rateNum,
+          fixedCharges: fixedNum,
+          dutyChargePerKWH: dutyNum,
+          startDate: startDateStr,
+          endDate: endDateStr,
+          bands: bandsPayload,
+        });
+        toast.success("Tariff updated");
+      }
+      setDialogOpen(false);
+      await loadTariffs();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error ?? (editingId === null ? "Failed to create tariff" : "Failed to update tariff"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeTariff = async (id: number) => {
+    try {
+      await apiService.deleteTariff(id);
+      toast.info("Tariff deleted");
+      setTariffs(prev => prev.filter(t => t.tariffID !== id));
+      if (activeTariff?.tariffID === id) setActiveTariff(null);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Failed to delete tariff");
+    }
+  };
+
+  const handleAddBand = async () => {
+    const rate = parseFloat(newBandRate);
+    if (isNaN(rate) || rate <= 0) { toast.error("Band rate must be > 0"); return; }
+    const startH = parseInt(newBandStart, 10);
+    const endH = parseInt(newBandEnd, 10);
+    if (isNaN(startH) || isNaN(endH)) { toast.error("Invalid hour values"); return; }
+
+    if (editingId !== null) {
+      setBandSaving(true);
+      try {
+        const result = await apiService.addTariffBand(editingId, {
+          bandName: newBandName, startHour: startH, endHour: endH, ratePerKWH: rate,
+        });
+        setBands(prev => [...prev, {
+          bandId: result.bandId, bandName: result.bandName,
+          startHour: result.startHour, endHour: result.endHour, ratePerKWH: String(result.ratePerKWH),
+        }]);
+        toast.success("Band added");
+        setNewBandRate("");
+      } catch (e: any) {
+        toast.error(e?.response?.data?.error ?? "Failed to add band");
+      } finally {
+        setBandSaving(false);
+      }
+    } else {
+      setBands(prev => [...prev, { bandName: newBandName, startHour: startH, endHour: endH, ratePerKWH: String(rate) }]);
+      setNewBandRate("");
+    }
+  };
+
+  const handleDeleteBand = async (band: BandDraft, idx: number) => {
+    if (editingId !== null && band.bandId != null) {
+      try {
+        await apiService.deleteTariffBand(editingId, band.bandId);
+        setBands(prev => prev.filter((_, i) => i !== idx));
+        toast.info("Band deleted");
+      } catch (e: any) {
+        toast.error(e?.response?.data?.message ?? "Failed to delete band");
+      }
+    } else {
+      setBands(prev => prev.filter((_, i) => i !== idx));
+    }
+  };
+
+  const startBandEdit = (idx: number) => {
+    setEditingBandIdx(idx);
+    setBandDraft({ ...bands[idx] });
+  };
+
+  const saveBandEdit = async (idx: number) => {
+    const rate = parseFloat(bandDraft.ratePerKWH ?? "0");
+    if (isNaN(rate) || rate <= 0) { toast.error("Rate must be > 0"); return; }
+    const updated: BandDraft = {
+      ...bands[idx],
+      bandName: bandDraft.bandName ?? bands[idx].bandName,
+      startHour: bandDraft.startHour ?? bands[idx].startHour,
+      endHour: bandDraft.endHour ?? bands[idx].endHour,
+      ratePerKWH: String(rate),
+    };
+
+    if (editingId !== null && bands[idx].bandId != null) {
+      try {
+        const result = await apiService.updateTariffBand(editingId, bands[idx].bandId!, {
+          bandName: updated.bandName, startHour: updated.startHour,
+          endHour: updated.endHour, ratePerKWH: rate,
+        });
+        setBands(prev => prev.map((b, i) => i === idx ? {
+          ...b, bandName: result.bandName, startHour: result.startHour,
+          endHour: result.endHour, ratePerKWH: String(result.ratePerKWH),
+        } : b));
+        toast.success("Band updated");
+      } catch (e: any) {
+        toast.error(e?.response?.data?.error ?? "Failed to update band");
+        return;
+      }
+    } else {
+      setBands(prev => prev.map((b, i) => i === idx ? updated : b));
+    }
+    setEditingBandIdx(null);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
+      <div className="settings-section-head settings-section-head--between">
+        <div className="settings-head-row"><IndianRupee /><h3 className="settings-section-title">Tariff Settings</h3></div>
+        <Button size="sm" onClick={openCreate}><Plus />New Tariff</Button>
+      </div>
+      <p className="settings-section-desc">Tariff is used for cost calculations across Energy dashboards and reports.</p>
+      <Separator />
+
+      {activeTariff && (
+        <div className="settings-tod-card">
+          <div className="settings-tod-head">
+            <div>
+              <h4 className="settings-tod-title">Active Tariff — {activeTariff.tariffCode}</h4>
+              <p className="settings-tod-hint">
+                Type: {activeTariff.tariffType} &nbsp;|&nbsp; Rate: ₹{activeTariff.ratePerKWH}/kWh &nbsp;|&nbsp;
+                Fixed: ₹{activeTariff.fixedCharges.toLocaleString()} &nbsp;|&nbsp;
+                Duty: ₹{activeTariff.dutyChargePerKWH}/kWh &nbsp;|&nbsp;
+                Since: {activeTariff.startDate}
+              </p>
+            </div>
+            <Badge variant="outline" className="settings-badge-offpeak settings-badge-sm">Active</Badge>
+          </div>
+          {activeTariff.bands.length > 0 && (
+            <div className="settings-tod-slots">
+              {activeTariff.bands.map(b => (
+                <div key={b.bandId} className="settings-tod-slot">
+                  <div className="settings-tod-slot-field">
+                    <Label className="settings-tod-slot-label">Band</Label>
+                    <Badge variant="outline" className={`${b.bandName === "Peak" ? "settings-badge-peak" : "settings-badge-offpeak"} settings-badge-sm`}>{b.bandName}</Badge>
+                  </div>
+                  <div className="settings-tod-slot-field">
+                    <Label className="settings-tod-slot-label">Time Range</Label>
+                    <span className="settings-section-desc">{b.timeRange}</span>
+                  </div>
+                  <div className="settings-tod-slot-field">
+                    <Label className="settings-tod-slot-label">Rate (₹/kWh)</Label>
+                    <span className="settings-section-desc">{b.ratePerKWH}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="settings-section settings-section--gap-sm">
+        <h4 className="settings-history-head"><History /> Tariff History</h4>
+        <div className="settings-table-wrap">
+          <table className="settings-table">
+            <thead>
+              <tr>
+                <th className="text-left">Code</th>
+                <th className="text-left">Type</th>
+                <th className="text-right">Rate (₹/kWh)</th>
+                <th className="text-right">Fixed (₹)</th>
+                <th className="text-right">Duty (₹/kWh)</th>
+                <th className="text-left">Start</th>
+                <th className="text-left">End</th>
+                <th className="text-left">Status</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={9} className="settings-table-empty">Loading…</td></tr>
+              ) : tariffs.length === 0 ? (
+                <tr><td colSpan={9} className="settings-table-empty">No tariffs configured. Click "New Tariff" to add one.</td></tr>
+              ) : tariffs.map(t => (
+                <tr key={t.tariffID}>
+                  <td className="mono">{t.tariffCode}</td>
+                  <td><Badge variant="outline" className="settings-badge-sm">{t.tariffType}</Badge></td>
+                  <td className="right mono-strong">{t.ratePerKWH.toFixed(2)}</td>
+                  <td className="right mono-strong">{t.fixedCharges.toLocaleString()}</td>
+                  <td className="right mono-strong">{t.dutyChargePerKWH.toFixed(3)}</td>
+                  <td className="small">{t.startDate}</td>
+                  <td className="small">{t.endDate ?? "—"}</td>
+                  <td>
+                    <Badge variant="outline" className={`${t.isActive ? "settings-badge-offpeak" : ""} settings-badge-sm`}>
+                      {t.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </td>
+                  <td>
+                    <div className="settings-actions-cell">
+                      <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => openEdit(t)}><Pencil /></Button>
+                      <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => removeTariff(t.tariffID)}><Trash2 /></Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="settings-dialog--lg">
+          <DialogHeader>
+            <DialogTitle>{editingId == null ? "New Tariff" : "Edit Tariff"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="settings-section">
+            <div className="settings-grid-3">
+              <div className="settings-field">
+                <Label>Tariff Code</Label>
+                <Input placeholder="e.g. LT-IIA-2026" value={fCode} onChange={e => setFCode(e.target.value)} />
+              </div>
+              <div className="settings-field">
+                <Label>Tariff Type</Label>
+                <Dropdown
+                  value={fType}
+                  onValueChange={setFType}
+                  options={[
+                    { value: "Fixed", label: "Fixed" },
+                    { value: "ToD", label: "Time-of-Day (ToD)" },
+                  ]}
+                />
+              </div>
+              <div className="settings-field">
+                <Label>Rate (₹/kWh)</Label>
+                <Input type="number" step="0.01" placeholder="0.00" value={fRate} onChange={e => setFRate(e.target.value)} />
+              </div>
+              <div className="settings-field">
+                <Label>Fixed Charges (₹)</Label>
+                <Input type="number" step="1" placeholder="0" value={fFixed} onChange={e => setFFixed(e.target.value)} />
+              </div>
+              <div className="settings-field">
+                <Label>Duty Charge (₹/kWh)</Label>
+                <Input type="number" step="0.001" placeholder="0.060" value={fDuty} onChange={e => setFDuty(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="settings-grid-3-cells">
+              <div className="settings-field">
+                <Label>Start Date</Label>
+                <Popover open={fStartOpen} onOpenChange={setFStartOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="settings-btn--full-start">
+                      <CalendarIcon className="settings-cal-icon" />
+                      {fStartDate ? format(fStartDate, "dd MMM yyyy") : "Pick date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={fStartDate} onSelect={d => { if (d) { setFStartDate(d); setFStartOpen(false); } }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="settings-field">
+                <Label>End Date <span className="settings-optional-muted">(optional)</span></Label>
+                <Popover open={fEndOpen} onOpenChange={setFEndOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="settings-btn--full-start">
+                      <CalendarIcon className="settings-cal-icon" />
+                      {fEndDate ? format(fEndDate, "dd MMM yyyy") : "No end date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={fEndDate} onSelect={d => { setFEndDate(d); setFEndOpen(false); }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {editingId === null && (
+                <div className="settings-field settings-field-flex-end">
+                  <div className="settings-label-checkbox-row">
+                    <Checkbox id="closeActive" checked={fCloseActive} onCheckedChange={v => setFCloseActive(!!v)} />
+                    <Label htmlFor="closeActive" className="settings-checkbox-label">Auto-close active tariff</Label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="settings-section settings-section--gap-sm">
+              <h4 className="settings-tod-title">Time Bands</h4>
+              <p className="settings-section-desc">Normal band is auto-added as fallback. Specify Peak, OffPeak, or HalfPeak bands. Hours are 0–23.</p>
+
+              {bands.length > 0 && (
+                <div className="settings-table-wrap">
+                  <table className="settings-table">
+                    <thead>
+                      <tr>
+                        <th className="text-left">Band</th>
+                        <th className="text-left">Start Hr</th>
+                        <th className="text-left">End Hr</th>
+                        <th className="text-right">Rate (₹/kWh)</th>
+                        <th className="text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bands.map((b, idx) => (
+                        <tr key={idx}>
+                          {editingBandIdx === idx ? (
+                            <>
+                              <td>
+                                <Dropdown
+                                  value={bandDraft.bandName ?? b.bandName}
+                                  onValueChange={v => setBandDraft(prev => ({ ...prev, bandName: v as BandDraft["bandName"] }))}
+                                  options={BAND_NAMES.map(n => ({ value: n, label: n }))}
+                                />
+                              </td>
+                              <td>
+                                <Input type="number" min={0} max={23}
+                                  value={bandDraft.startHour ?? b.startHour}
+                                  onChange={e => setBandDraft(prev => ({ ...prev, startHour: parseInt(e.target.value) || 0 }))} />
+                              </td>
+                              <td>
+                                <Input type="number" min={0} max={23}
+                                  value={bandDraft.endHour ?? b.endHour}
+                                  onChange={e => setBandDraft(prev => ({ ...prev, endHour: parseInt(e.target.value) || 0 }))} />
+                              </td>
+                              <td>
+                                <Input type="number" step="0.01"
+                                  value={bandDraft.ratePerKWH ?? b.ratePerKWH}
+                                  onChange={e => setBandDraft(prev => ({ ...prev, ratePerKWH: e.target.value }))} />
+                              </td>
+                              <td>
+                                <div className="settings-actions-cell">
+                                  <Button size="sm" variant="outline" onClick={() => saveBandEdit(idx)}>Save</Button>
+                                  <Button size="sm" variant="ghost" onClick={() => setEditingBandIdx(null)}>Cancel</Button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td>
+                                <Badge variant="outline" className={`${b.bandName === "Peak" ? "settings-badge-peak" : "settings-badge-offpeak"} settings-badge-sm`}>{b.bandName}</Badge>
+                              </td>
+                              <td className="mono">{hrLabel(b.startHour)}</td>
+                              <td className="mono">{hrLabel(b.endHour)}</td>
+                              <td className="right mono-strong">{parseFloat(b.ratePerKWH).toFixed(2)}</td>
+                              <td>
+                                <div className="settings-actions-cell">
+                                  <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => startBandEdit(idx)}><Pencil /></Button>
+                                  <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => handleDeleteBand(b, idx)}><Trash2 /></Button>
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="settings-band-add-grid">
+                <Dropdown
+                  value={newBandName}
+                  onValueChange={v => setNewBandName(v as BandDraft["bandName"])}
+                  options={BAND_NAMES.map(n => ({ value: n, label: n }))}
+                />
+                <Input type="number" min={0} max={23} placeholder="Start hr" value={newBandStart} onChange={e => setNewBandStart(e.target.value)} />
+                <Input type="number" min={0} max={23} placeholder="End hr" value={newBandEnd} onChange={e => setNewBandEnd(e.target.value)} />
+                <Input type="number" step="0.01" placeholder="Rate ₹/kWh" value={newBandRate} onChange={e => setNewBandRate(e.target.value)} />
+                <Button size="sm" onClick={handleAddBand} disabled={bandSaving}>
+                  <Plus />{bandSaving ? "Adding…" : "Add Band"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={saveTariff} disabled={saving}>
+              {saving ? "Saving…" : editingId == null ? "Create Tariff" : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </motion.div>
   );
 };
 

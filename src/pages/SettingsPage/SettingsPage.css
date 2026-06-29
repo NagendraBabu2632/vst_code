@@ -564,6 +564,26 @@
   overflow-y: auto;
 }
 
+/* Wider dialog for tariff create/edit */
+.settings-dialog--lg {
+  max-width: 52rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Band add row: name | start hr | end hr | rate | button */
+.settings-band-add-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  align-items: end;
+}
+@media (min-width: 640px) {
+  .settings-band-add-grid {
+    grid-template-columns: 1fr 6rem 6rem 1fr auto;
+  }
+}
+
 .page-title{
   margin-bottom: 0.5rem;
 }

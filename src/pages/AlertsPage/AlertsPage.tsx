@@ -5,11 +5,12 @@ import Loader from "@/components/Loader/Loader";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
 import {
   fetchAlertsData,
-  acknowledgeAlert,
+  acknowledgeAlertAsync,
   selectAlertsLoading,
   selectAlertsError,
   selectAlerts,
   selectAlertsKpi,
+  selectAckLoading,
   type AlertItem,
 } from "@/redux/slices/alertsSlice";
 import {
@@ -118,8 +119,9 @@ const AlertRow = ({ alert, onAcknowledge }: { alert: AlertItem; onAcknowledge: (
 
 const AlertsPage = () => {
   const dispatch = useAppDispatch();
-  const loading  = useAppSelector(selectAlertsLoading);
-  const error    = useAppSelector(selectAlertsError);
+  const loading    = useAppSelector(selectAlertsLoading);
+  const error      = useAppSelector(selectAlertsError);
+  const ackLoading = useAppSelector(selectAckLoading);
   const alerts   = useAppSelector(selectAlerts);
   const kpiData  = useAppSelector(selectAlertsKpi);
   const selections   = useAppSelector(selectDropdownSelections);
@@ -163,18 +165,15 @@ const AlertsPage = () => {
     return list;
   }, [alerts, statusFilter, severityTab]);
 
-  const handleAcknowledge = () => {
+  const handleAcknowledge = async () => {
     if (!ackAlert || !ackComment.trim()) return;
-    dispatch(
-      acknowledgeAlert({
-        alertId: ackAlert.alertId,
-        acknowledgedBy: "Current User",
-        acknowledgedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
-        acknowledgedComment: ackComment.trim(),
-      })
+    const result = await dispatch(
+      acknowledgeAlertAsync({ alertId: ackAlert.alertId, comment: ackComment.trim() })
     );
-    setAckAlert(null);
-    setAckComment("");
+    if (acknowledgeAlertAsync.fulfilled.match(result)) {
+      setAckAlert(null);
+      setAckComment("");
+    }
   };
 
   if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
@@ -278,7 +277,9 @@ const AlertsPage = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAckAlert(null)}>Cancel</Button>
-            <Button onClick={handleAcknowledge} disabled={!ackComment.trim()}>Confirm</Button>
+            <Button onClick={handleAcknowledge} disabled={!ackComment.trim() || ackLoading}>
+              {ackLoading ? "Confirming…" : "Confirm"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
