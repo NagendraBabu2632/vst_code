@@ -214,12 +214,6 @@ export const MoistureBarChart = ({
   }, []);
   const hideTip = useCallback(() => tooltipRef.current?.classList.remove("is-visible"), []);
 
-  const refLines = [
-    { val: lsl,    label: "LSL",    color: "hsl(0, 85%, 60%)",    dash: "5 3" },
-    { val: usl,    label: "USL",    color: "hsl(0, 85%, 60%)",    dash: "5 3" },
-    { val: target, label: "Target", color: "hsl(210, 100%, 60%)", dash: "4 4" },
-  ];
-
   return (
     <div ref={ref} className="d3-bar-wrap">
       <svg width={width} height={MOIST_HEIGHT}>
@@ -229,21 +223,6 @@ export const MoistureBarChart = ({
             <line key={t} x1={0} x2={innerW} y1={y(t)} y2={y(t)}
               stroke={gridStroke} strokeDasharray="3 3" />
           ))}
-
-          {/* Reference lines */}
-          {refLines.map(({ val, label, color, dash }) => {
-            const ry = y(val);
-            if (ry < -1 || ry > innerH + 1) return null;
-            return (
-              <g key={label}>
-                <line x1={0} x2={innerW} y1={ry} y2={ry}
-                  stroke={color} strokeWidth={1.5} strokeDasharray={dash} />
-                <text x={innerW + 4} y={ry} dy={3} fontSize={8} fill={color} fontWeight={600}>
-                  {label}
-                </text>
-              </g>
-            );
-          })}
 
           {/* Bars — values shown only in tooltip */}
           {data.map((d) => {
@@ -296,6 +275,131 @@ export const MoistureBarChart = ({
         </g>
       </svg>
       <div ref={tooltipRef} className="d3-tooltip" />
+    </div>
+  );
+};
+
+/* ============================================================
+ * Humidity Bar Chart — 3 vertical bars: PMD | SMD | Total
+ * ========================================================== */
+
+export interface HumidityData {
+  pmd: number;
+  smd: number;
+  total: number;
+}
+
+interface HumidityBarChartProps {
+  data?: HumidityData;
+}
+
+const HUM_HEIGHT = 120;
+const HUM_MARGIN = { top: 22, right: 6, bottom: 26, left: 30 };
+
+const humBarColors = [
+  "hsl(200 98% 39%)",  // PMD — info blue
+  "hsl(38 92% 48%)",   // SMD — amber
+];
+const humLabels = ["PMD", "SMD"] as const;
+
+export const HumidityBarChart = ({ data }: HumidityBarChartProps) => {
+  const { ref, width } = useChartSize(300);
+
+  // API may return null despite the TypeScript type saying number
+  const values = useMemo<[number | null, number | null]>(
+    () => data ? [data.pmd ?? null, data.smd ?? null] : [null, null],
+    [data]
+  );
+
+  const innerW = Math.max(20, width - HUM_MARGIN.left - HUM_MARGIN.right);
+  const innerH = HUM_HEIGHT - HUM_MARGIN.top - HUM_MARGIN.bottom;
+
+  const x = useMemo(
+    () => d3.scaleBand<string>().domain([...humLabels]).range([0, innerW]).padding(0.3),
+    [innerW]
+  );
+
+  const yDomain = useMemo(() => {
+    const valid = values.filter((v): v is number => v != null);
+    if (!valid.length) return [0, 100] as [number, number];
+    const lo = Math.min(...valid);
+    const hi = Math.max(...valid);
+    const spread = Math.max(hi - lo, 0.5);
+    return [Math.max(0, lo - spread * 2.5), hi + spread] as [number, number];
+  }, [values]);
+
+  const y = useMemo(
+    () => d3.scaleLinear().domain(yDomain).nice().range([innerH, 0]),
+    [yDomain, innerH]
+  );
+
+  const yTicks = y.ticks(3);
+
+  return (
+    <div ref={ref} className="d3-bar-wrap">
+      <svg width={width} height={HUM_HEIGHT}>
+        <g transform={`translate(${HUM_MARGIN.left},${HUM_MARGIN.top})`}>
+
+          {/* Horizontal grid lines */}
+          {yTicks.map((t) => (
+            <line key={t} x1={0} x2={innerW} y1={y(t)} y2={y(t)}
+              stroke={gridStroke} strokeDasharray="3 3" />
+          ))}
+
+          {/* Bars + value labels */}
+          {humLabels.map((label, i) => {
+            const bx      = x(label) ?? 0;
+            const bw      = x.bandwidth();
+            const val     = values[i];
+            const safeVal = val ?? 0;
+            const by      = y(safeVal);
+            const bh      = val != null ? Math.max(0, innerH - by) : 0;
+            const fill    = humBarColors[i];
+            return (
+              <g key={label}>
+                <rect
+                  x={bx} y={by} width={bw} height={bh}
+                  fill={fill} fillOpacity={0.85} rx={3}
+                />
+                <text
+                  x={bx + bw / 2} y={by - 4}
+                  textAnchor="middle" fontSize={9} fill={fill} fontWeight={700}
+                >
+                  {val != null ? val.toFixed(1) : "—"}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Y axis */}
+          <line y1={0} y2={innerH} stroke={axisStroke} />
+          {yTicks.map((t) => (
+            <g key={t} transform={`translate(0,${y(t)})`}>
+              <line x1={-3} stroke={axisStroke} />
+              <text x={-5} dy={3} textAnchor="end" fontSize={8} fill={axisStroke}>{t}</text>
+            </g>
+          ))}
+
+          {/* Unit label top-right */}
+          <text x={innerW} y={-8} textAnchor="end" fontSize={8} fill={axisStroke}>% RH</text>
+
+          {/* X axis + labels */}
+          <g transform={`translate(0,${innerH})`}>
+            <line x1={0} x2={innerW} stroke={axisStroke} />
+            {humLabels.map((label) => {
+              const cx = (x(label) ?? 0) + x.bandwidth() / 2;
+              return (
+                <g key={label} transform={`translate(${cx},0)`}>
+                  <line y2={3} stroke={axisStroke} />
+                  <text y={12} textAnchor="middle" fontSize={9} fill={axisStroke} fontWeight={500}>
+                    {label}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        </g>
+      </svg>
     </div>
   );
 };

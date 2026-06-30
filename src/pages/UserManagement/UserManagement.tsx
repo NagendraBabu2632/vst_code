@@ -1,13 +1,16 @@
 import "./UserManagement.css";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
 import {
+  fetchUsers,
+  createUser,
+  editUser,
+  deactivateUser,
+  resetUserPassword,
   selectUsers,
-  addUser,
-  updateUser,
-  deleteUser,
-  type User,
+  selectUsersLoading,
+  type UserApiItem,
 } from "@/redux/slices/userManagementSlice";
 import {
   Dialog,
@@ -18,121 +21,162 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, Search, UserPlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Pencil, Trash2, Search, UserPlus, ChevronLeft, ChevronRight, Key, Loader2, Copy } from "lucide-react";
+import { toast } from "sonner";
 
 const PAGE_SIZE = 10;
 
 type ModalMode = "add" | "edit" | null;
 
 interface UserForm {
-  UserName: string;
-  UserMailId: string;
-  Designation: string;
-  RoleType: "Manager" | "Operator";
-  Active: "Yes" | "No";
+  username: string;
+  email: string;
+  designation: string;
+  role: "Manager" | "Operator";
+  isActive: boolean;
 }
 
 const emptyForm = (): UserForm => ({
-  UserName: "",
-  UserMailId: "",
-  Designation: "",
-  RoleType: "Operator",
-  Active: "Yes",
+  username: "",
+  email: "",
+  designation: "",
+  role: "Operator",
+  isActive: true,
 });
 
 const UserManagement = () => {
   const dispatch = useAppDispatch();
-  const users = useAppSelector(selectUsers);
+  const users   = useAppSelector(selectUsers);
+  const loading = useAppSelector(selectUsersLoading);
 
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [modalMode, setModalMode] = useState<ModalMode>(null);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [form, setForm] = useState<UserForm>(emptyForm());
-  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [search, setSearch]               = useState("");
+  const [page, setPage]                   = useState(1);
+  const [modalMode, setModalMode]         = useState<ModalMode>(null);
+  const [editingUser, setEditingUser]     = useState<UserApiItem | null>(null);
+  const [form, setForm]                   = useState<UserForm>(emptyForm());
+  const [deactivateTarget, setDeactivateTarget] = useState<UserApiItem | null>(null);
+  const [saving, setSaving]               = useState(false);
+  const [deactivating, setDeactivating]   = useState(false);
+  const [passwordInfo, setPasswordInfo]   = useState<{ title: string; username: string; password: string } | null>(null);
+
+  useEffect(() => {
+    dispatch(fetchUsers());
+  }, [dispatch]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return users;
     return users.filter(
       (u) =>
-        String(u.UserId).includes(q) ||
-        u.UserName.toLowerCase().includes(q) ||
-        u.UserMailId.toLowerCase().includes(q) ||
-        u.RoleType.toLowerCase().includes(q)
+        String(u.userId).includes(q) ||
+        u.username.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.role.toLowerCase().includes(q) ||
+        u.designation.toLowerCase().includes(q)
     );
   }, [users, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const safePage   = Math.min(page, totalPages);
+  const pageRows   = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const handleSearchChange = (val: string) => {
-    setSearch(val);
-    setPage(1);
-  };
+  const handleSearchChange = (val: string) => { setSearch(val); setPage(1); };
 
-  const openAdd = () => {
-    setForm(emptyForm());
-    setEditingUser(null);
-    setModalMode("add");
-  };
+  const openAdd = () => { setForm(emptyForm()); setEditingUser(null); setModalMode("add"); };
 
-  const openEdit = (user: User) => {
+  const openEdit = (user: UserApiItem) => {
     setForm({
-      UserName: user.UserName,
-      UserMailId: user.UserMailId,
-      Designation: user.Designation,
-      RoleType: user.RoleType,
-      Active: user.Active,
+      username:    user.username,
+      email:       user.email,
+      designation: user.designation,
+      role:        user.role,
+      isActive:    user.isActive,
     });
     setEditingUser(user);
     setModalMode("edit");
   };
 
-  const closeModal = () => {
-    setModalMode(null);
-    setEditingUser(null);
-  };
+  const closeModal = () => { setModalMode(null); setEditingUser(null); };
 
-  const handleSave = () => {
-    if (!form.UserName.trim() || !form.UserMailId.trim()) return;
-    if (modalMode === "add") {
-      dispatch(addUser({
-        UserName: form.UserName.trim(),
-        UserMailId: form.UserMailId.trim(),
-        Designation: form.Designation.trim(),
-        RoleType: form.RoleType,
-        Active: form.Active,
-      }));
-    } else if (modalMode === "edit" && editingUser) {
-      dispatch(updateUser({
-        UserId: editingUser.UserId,
-        UserName: form.UserName.trim(),
-        UserMailId: form.UserMailId.trim(),
-        Designation: form.Designation.trim(),
-        RoleType: form.RoleType,
-        Active: form.Active,
-      }));
+  const handleSave = async () => {
+    if (!form.username.trim() || !form.email.trim()) return;
+    setSaving(true);
+    try {
+      if (modalMode === "add") {
+        const result = await dispatch(createUser({
+          username:    form.username.trim(),
+          email:       form.email.trim(),
+          designation: form.designation.trim() || undefined,
+          role:        form.role,
+        })).unwrap();
+        closeModal();
+        dispatch(fetchUsers());
+        setPasswordInfo({ title: "User Created", username: form.username.trim(), password: result.defaultPassword });
+      } else if (modalMode === "edit" && editingUser) {
+        await dispatch(editUser({
+          id:      editingUser.userId,
+          payload: {
+            username:    form.username.trim(),
+            email:       form.email.trim(),
+            designation: form.designation.trim() || undefined,
+            role:        form.role,
+            isActive:    form.isActive,
+          },
+        })).unwrap();
+        closeModal();
+        toast.success("User updated successfully.");
+      }
+    } catch (err: any) {
+      toast.error(typeof err === "string" ? err : "Operation failed. Please try again.");
+    } finally {
+      setSaving(false);
     }
-    closeModal();
   };
 
-  const handleDelete = () => {
-    if (deleteTarget) {
-      dispatch(deleteUser(deleteTarget.UserId));
-      setDeleteTarget(null);
+  const handleDeactivate = async () => {
+    if (!deactivateTarget) return;
+    setDeactivating(true);
+    try {
+      await dispatch(deactivateUser(deactivateTarget.userId)).unwrap();
+      toast.success(`${deactivateTarget.username} has been deactivated.`);
+      setDeactivateTarget(null);
+    } catch (err: any) {
+      toast.error(typeof err === "string" ? err : "Failed to deactivate user.");
+    } finally {
+      setDeactivating(false);
     }
   };
 
-  const field = (key: keyof UserForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  const handleResetPassword = async (user: UserApiItem) => {
+    try {
+      const result = await dispatch(resetUserPassword(user.userId)).unwrap();
+      setPasswordInfo({ title: "Password Reset", username: user.username, password: result.defaultPassword });
+    } catch (err: any) {
+      toast.error(typeof err === "string" ? err : "Failed to reset password.");
+    }
+  };
 
-  const isFormValid = form.UserName.trim() && form.UserMailId.trim();
+  const handleCopyPassword = (password: string) => {
+    navigator.clipboard.writeText(password).then(
+      () => toast.success("Password copied to clipboard."),
+      () => toast.error("Could not copy to clipboard.")
+    );
+  };
+
+  const field =
+    (key: keyof UserForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((prev) => ({
+        ...prev,
+        [key]: key === "isActive" ? e.target.value === "true" : e.target.value,
+      }));
+
+  const isFormValid = form.username.trim() && form.email.trim();
 
   return (
     <DashboardLayout>
       <div className="um-page">
+
         {/* Header */}
         <div className="um-header">
           <h2 className="um-title">User Management</h2>
@@ -164,17 +208,26 @@ const UserManagement = () => {
                 <tr>
                   <th>User ID</th>
                   <th>Username</th>
-                  <th>User Mail ID</th>
+                  <th>Email</th>
                   <th>Designation</th>
                   <th>Role</th>
-                  <th>Active</th>
-                  <th>Creation Date</th>
-                  <th>Modification Date</th>
+                  <th>Status</th>
+                  <th>Last Login</th>
+                  <th>Created At</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {pageRows.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={9}>
+                      <div className="um-loading-row">
+                        <Loader2 size={16} className="animate-spin" />
+                        Loading users…
+                      </div>
+                    </td>
+                  </tr>
+                ) : pageRows.length === 0 ? (
                   <tr>
                     <td colSpan={9}>
                       <div className="um-empty">No users found.</div>
@@ -182,41 +235,54 @@ const UserManagement = () => {
                   </tr>
                 ) : (
                   pageRows.map((user) => (
-                    <tr key={user.UserId}>
-                      <td>{user.UserId}</td>
-                      <td>{user.UserName}</td>
-                      <td>{user.UserMailId}</td>
-                      <td>{user.Designation}</td>
+                    <tr key={user.userId}>
+                      <td>{user.userId}</td>
+                      <td>{user.username}</td>
+                      <td>{user.email}</td>
+                      <td>{user.designation || "—"}</td>
                       <td>
-                        <span className={`um-badge ${user.RoleType === "Manager" ? "um-badge--manager" : "um-badge--operator"}`}>
-                          {user.RoleType}
+                        <span className={`um-badge ${user.role === "Manager" ? "um-badge--manager" : "um-badge--operator"}`}>
+                          {user.role}
                         </span>
                       </td>
                       <td>
-                        <span className={`um-badge ${user.Active === "Yes" ? "um-badge--yes" : "um-badge--no"}`}>
-                          {user.Active}
+                        <span className={`um-badge ${user.isActive ? "um-badge--yes" : "um-badge--no"}`}>
+                          {user.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td>{user.creationDateUTC}</td>
-                      <td>{user.modifiedDateUTC}</td>
+                      <td className="um-mono">{user.lastLoggedIn}</td>
+                      <td>{user.createdAt}</td>
                       <td>
                         <div className="um-actions">
                           <button
                             type="button"
                             className="um-icon-btn um-icon-btn--edit"
-                            aria-label={`Edit ${user.UserName}`}
+                            aria-label={`Edit ${user.username}`}
+                            title="Edit user"
                             onClick={() => openEdit(user)}
                           >
                             <Pencil size={13} aria-hidden="true" />
                           </button>
                           <button
                             type="button"
-                            className="um-icon-btn um-icon-btn--delete"
-                            aria-label={`Delete ${user.UserName}`}
-                            onClick={() => setDeleteTarget(user)}
+                            className="um-icon-btn um-icon-btn--reset"
+                            aria-label={`Reset password for ${user.username}`}
+                            title="Reset to default password"
+                            onClick={() => handleResetPassword(user)}
                           >
-                            <Trash2 size={13} aria-hidden="true" />
+                            <Key size={13} aria-hidden="true" />
                           </button>
+                          {user.isActive && (
+                            <button
+                              type="button"
+                              className="um-icon-btn um-icon-btn--delete"
+                              aria-label={`Deactivate ${user.username}`}
+                              title="Deactivate user"
+                              onClick={() => setDeactivateTarget(user)}
+                            >
+                              <Trash2 size={13} aria-hidden="true" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -267,20 +333,22 @@ const UserManagement = () => {
         </div>
       </div>
 
-      {/* Add / Edit Modal */}
+      {/* ── Add / Edit Modal ─────────────────────────────────────────── */}
       <Dialog open={modalMode !== null} onOpenChange={(open) => !open && closeModal()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{modalMode === "add" ? "Add New User" : "Edit User"}</DialogTitle>
             <DialogDescription>
-              {modalMode === "add" ? "Fill in the details to create a new user." : "Update the user details below."}
+              {modalMode === "add"
+                ? "Fill in the details to create a new user. A default password will be generated."
+                : "Update the user details below."}
             </DialogDescription>
           </DialogHeader>
           <div className="um-form-grid">
             {modalMode === "edit" && editingUser && (
               <div className="um-field">
                 <label htmlFor="um-user-id" className="um-label">User ID</label>
-                <input id="um-user-id" className="um-input" value={editingUser.UserId} disabled aria-disabled="true" />
+                <input id="um-user-id" className="um-input" value={editingUser.userId} disabled aria-disabled="true" />
               </div>
             )}
             <div className="um-field">
@@ -289,19 +357,19 @@ const UserManagement = () => {
                 id="um-username"
                 className="um-input"
                 placeholder="Enter username"
-                value={form.UserName}
-                onChange={field("UserName")}
+                value={form.username}
+                onChange={field("username")}
               />
             </div>
             <div className="um-field">
-              <label htmlFor="um-mailid" className="um-label">User Mail ID *</label>
+              <label htmlFor="um-email" className="um-label">Email *</label>
               <input
-                id="um-mailid"
+                id="um-email"
                 className="um-input"
                 type="email"
-                placeholder="e.g. user@example.com"
-                value={form.UserMailId}
-                onChange={field("UserMailId")}
+                placeholder="e.g. user@vst.com"
+                value={form.email}
+                onChange={field("email")}
               />
             </div>
             <div className="um-field">
@@ -310,51 +378,87 @@ const UserManagement = () => {
                 id="um-designation"
                 className="um-input"
                 placeholder="e.g. Energy Manager"
-                value={form.Designation}
-                onChange={field("Designation")}
+                value={form.designation}
+                onChange={field("designation")}
               />
             </div>
             <div className="um-field">
               <label htmlFor="um-role" className="um-label">Role</label>
-              <select id="um-role" className="um-select" value={form.RoleType} onChange={field("RoleType")}>
+              <select id="um-role" className="um-select" value={form.role} onChange={field("role")}>
                 <option value="Manager">Manager</option>
                 <option value="Operator">Operator</option>
               </select>
             </div>
             {modalMode === "edit" && (
               <div className="um-field">
-                <label htmlFor="um-active" className="um-label">Active</label>
-                <select id="um-active" className="um-select" value={form.Active} onChange={field("Active")}>
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
+                <label htmlFor="um-status" className="um-label">Status</label>
+                <select id="um-status" className="um-select" value={String(form.isActive)} onChange={field("isActive")}>
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
                 </select>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!isFormValid}>
+            <Button variant="outline" onClick={closeModal} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSave} disabled={!isFormValid || saving}>
+              {saving && <Loader2 size={13} className="animate-spin" style={{ marginRight: 4 }} />}
               {modalMode === "add" ? "Create User" : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Modal */}
-      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      {/* ── Deactivate Confirmation ──────────────────────────────────── */}
+      <Dialog open={deactivateTarget !== null} onOpenChange={(open) => !open && setDeactivateTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete User</DialogTitle>
-            <DialogDescription>This action cannot be undone.</DialogDescription>
+            <DialogTitle>Deactivate User</DialogTitle>
+            <DialogDescription>The user will lose access to the application.</DialogDescription>
           </DialogHeader>
           <p className="um-delete-msg">
-            Are you sure you want to delete user{" "}
-            <span className="um-delete-name">{deleteTarget?.UserName}</span>{" "}
-            (<span className="um-delete-name">{deleteTarget?.UserMailId}</span>)?
+            Are you sure you want to deactivate{" "}
+            <span className="um-delete-name">{deactivateTarget?.username}</span>
+            {" "}(<span className="um-delete-name">{deactivateTarget?.email}</span>)?
+            You can reactivate them later via <strong>Edit</strong>.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setDeactivateTarget(null)} disabled={deactivating}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeactivate} disabled={deactivating}>
+              {deactivating && <Loader2 size={13} className="animate-spin" style={{ marginRight: 4 }} />}
+              Deactivate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Password Info Dialog (create / reset) ───────────────────── */}
+      <Dialog open={passwordInfo !== null} onOpenChange={(open) => !open && setPasswordInfo(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{passwordInfo?.title}</DialogTitle>
+            <DialogDescription>
+              Share the temporary password with <strong>{passwordInfo?.username}</strong>.
+              They will be required to change it on their first login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="um-password-box">
+            <span className="um-password-label">Default Password</span>
+            <div className="um-password-row">
+              <span className="um-password-value">{passwordInfo?.password}</span>
+              <button
+                type="button"
+                className="um-copy-btn"
+                aria-label="Copy password to clipboard"
+                title="Copy to clipboard"
+                onClick={() => passwordInfo && handleCopyPassword(passwordInfo.password)}
+              >
+                <Copy size={13} />
+              </button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setPasswordInfo(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

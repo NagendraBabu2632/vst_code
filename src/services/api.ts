@@ -262,6 +262,46 @@ export interface ProcessParamReportItem {
   status: "Normal" | "Breach" | "No Spec";
 }
 
+// ─── User Management Types ────────────────────────────────────────────────────
+
+export interface UserApiItem {
+  userId: number;
+  username: string;
+  email: string;
+  designation: string;
+  role: "Manager" | "Operator";
+  isActive: boolean;
+  lastLoggedIn: string;
+  createdAt: string;
+  modifiedAt: string | null;
+}
+
+export interface CreateUserPayload {
+  username: string;
+  email: string;
+  designation?: string;
+  role: "Manager" | "Operator";
+}
+
+export interface UpdateUserPayload {
+  username: string;
+  email: string;
+  designation?: string;
+  role: "Manager" | "Operator";
+  isActive: boolean;
+}
+
+export interface CreateUserResponse {
+  message: string;
+  userId: number;
+  defaultPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+  defaultPassword: string;
+}
+
 // ─── Alert Rules Types ────────────────────────────────────────────────────────
 
 export interface AlertRuleApi {
@@ -835,6 +875,32 @@ export const apiService = {
   async fetchProductionData(date: string) {
     const res = await apiClient.get("/production", { params: { date } });
     return res.data;
+  },
+
+  // ── User Management ───────────────────────────────────────────────────────
+  async fetchUsers() {
+    const res = await apiClient.get("/users");
+    return res.data as UserApiItem[];
+  },
+
+  async createUser(payload: CreateUserPayload) {
+    const res = await apiClient.post("/users", payload);
+    return res.data as CreateUserResponse;
+  },
+
+  async updateUser(id: number, payload: UpdateUserPayload) {
+    const res = await apiClient.put(`/users/${id}`, payload);
+    return res.data as { message: string; user: UserApiItem };
+  },
+
+  async deactivateUser(id: number) {
+    const res = await apiClient.delete(`/users/${id}`);
+    return res.data as { message: string };
+  },
+
+  async resetUserPassword(id: number) {
+    const res = await apiClient.put(`/users/${id}/reset-password`);
+    return res.data as ResetPasswordResponse;
   },
 
   // ── Alert Rules ───────────────────────────────────────────────────────────

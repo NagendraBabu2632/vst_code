@@ -110,6 +110,12 @@
   background: color-mix(in srgb, var(--warning) 10%, transparent);
   position: relative;
 }
+.exec-card-icon-wrap--humidity {
+  background: color-mix(in srgb, var(--chart-humidity, hsl(200 98% 39%)) 12%, transparent);
+}
+.exec-card-icon-wrap--humidity .exec-card-icon {
+  color: var(--chart-humidity, hsl(200 98% 39%));
+}
 .exec-card-icon {
   width: 0.875rem;
   height: 0.875rem;

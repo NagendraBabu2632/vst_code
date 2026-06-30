@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { EnergyTrendAreaChart } from "../../components/charts/AreaChart/AreaChart";
-import { Top5BarChart, MoistureBarChart } from "../../components/charts/BarChart/BarChart";
+import { Top5BarChart, MoistureBarChart, HumidityBarChart } from "../../components/charts/BarChart/BarChart";
 
 const MOISTURE_SPEC = { lsl: 11.5, target: 12.5, usl: 13.5 };
 
@@ -253,13 +253,19 @@ const ExecutiveSummary = () => {
           <p className="exec-drill-hint">click for Process Analysis →</p>
         </motion.div>
 
-        <KpiCard
-          title="Avg Humidity"
-          value={humidityMoisture?.humidity.total ?? summaryKpi.avgHumidity}
-          unit="% RH"
-          icon={Wind}
-          accentColor="humidity"
-        />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="kpi-card"
+        >
+          <div className="exec-card-head">
+            <span className="exec-card-label">Avg Humidity</span>
+            <div className="exec-card-icon-wrap exec-card-icon-wrap--humidity">
+              <Wind className="exec-card-icon" />
+            </div>
+          </div>
+          <HumidityBarChart data={humidityMoisture?.humidity} />
+        </motion.div>
       </div>
 
       {/* ── Alerts Summary ───────────────────────────────────────────────── */}
