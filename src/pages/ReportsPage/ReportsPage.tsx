@@ -401,28 +401,65 @@ const ReportsPage = () => {
 
         {/* Filters row — below the tabs */}
         <div className="reports-filters-row">
-          {[
-            { label: "Unit",    value: selections.unit,    setter: (v: string) => { const fl = unitToLineMap[v]?.[0]?.value ?? ""; const fm = lineToMachineMap[fl]?.[0]?.value ?? ""; set("unit")(v); set("line")(fl); set("machine")(fm); }, opts: unitOpts.length   ? unitOpts   : [{ value: "PMD", label: "PMD" }] },
-            { label: "Line",    value: selections.line,    setter: (v: string) => { set("line")(v); set("machine")(lineToMachineMap[v]?.[0]?.value ?? ""); }, opts: lineOpts.length   ? lineOpts   : [{ value: "All", label: "All" }] },
-            { label: "Machine", value: selections.machine, setter: set("machine"), opts: machineOpts.length ? machineOpts : [{ value: "All", label: "All" }] },
-            { label: "Family",  value: selections.family,  setter: set("family"),  opts: familyOpts.length ? familyOpts : [{ value: "CFT", label: "CFT" }] },
-            { label: "Shift",   value: selections.shift,   setter: set("shift"),   opts: shiftOpts.length  ? shiftOpts  : [{ value: "All", label: "All" }] },
-          ].map((f) => (
-            <div key={f.label} className="reports-filter">
-              <label className="reports-filter-label">{f.label}</label>
-              <Dropdown value={f.value} onValueChange={f.setter} options={f.opts} />
-            </div>
-          ))}
-
+          {/* Unit — always visible */}
           <div className="reports-filter">
-            <label className="reports-filter-label">Parameter</label>
+            <label className="reports-filter-label">Unit</label>
             <Dropdown
-              value={filterParam}
-              onValueChange={(v) => { setFilterParam(v); setPage(1); }}
-              options={paramOpts.length ? paramOpts : ["All", "Temperature", "Humidity"]}
+              value={selections.unit}
+              onValueChange={(v) => { const fl = unitToLineMap[v]?.[0]?.value ?? ""; const fm = lineToMachineMap[fl]?.[0]?.value ?? ""; set("unit")(v); set("line")(fl); set("machine")(fm); }}
+              options={unitOpts.length ? unitOpts : [{ value: "PMD", label: "PMD" }]}
             />
           </div>
 
+          {/* Line — process and alerts only */}
+          {(reportType === "process" || reportType === "alerts") && (
+            <div className="reports-filter">
+              <label className="reports-filter-label">Line</label>
+              <Dropdown
+                value={selections.line}
+                onValueChange={(v) => { set("line")(v); set("machine")(lineToMachineMap[v]?.[0]?.value ?? ""); }}
+                options={lineOpts.length ? lineOpts : [{ value: "All", label: "All" }]}
+              />
+            </div>
+          )}
+
+          {/* Machine — process and alerts only */}
+          {(reportType === "process" || reportType === "alerts") && (
+            <div className="reports-filter">
+              <label className="reports-filter-label">Machine</label>
+              <Dropdown value={selections.machine} onValueChange={set("machine")} options={machineOpts.length ? machineOpts : [{ value: "All", label: "All" }]} />
+            </div>
+          )}
+
+          {/* Parameter — process and alerts only */}
+          {(reportType === "process" || reportType === "alerts") && (
+            <div className="reports-filter">
+              <label className="reports-filter-label">Parameter</label>
+              <Dropdown
+                value={filterParam}
+                onValueChange={(v) => { setFilterParam(v); setPage(1); }}
+                options={paramOpts.length ? paramOpts : ["All", "Temperature", "Humidity"]}
+              />
+            </div>
+          )}
+
+          {/* Family — process + moisture only */}
+          {reportType === "process" && filterParam.toLowerCase() === "moisture" && (
+            <div className="reports-filter">
+              <label className="reports-filter-label">Family</label>
+              <Dropdown value={selections.family} onValueChange={set("family")} options={familyOpts.length ? familyOpts : [{ value: "CFT", label: "CFT" }]} />
+            </div>
+          )}
+
+          {/* Shift — process only */}
+          {reportType === "process" && (
+            <div className="reports-filter">
+              <label className="reports-filter-label">Shift</label>
+              <Dropdown value={selections.shift} onValueChange={set("shift")} options={shiftOpts.length ? shiftOpts : [{ value: "All", label: "All" }]} />
+            </div>
+          )}
+
+          {/* Period — always visible */}
           <div className="reports-filter">
             <label className="reports-filter-label">Period</label>
             <Dropdown

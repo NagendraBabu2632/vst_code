@@ -11,6 +11,7 @@ import {
   selectProcessData,
   selectControlLimits,
   selectSensorStats,
+  selectMoistureBlendList,
 } from "@/redux/slices/processAnalysisSlice";
 import {
   resetPageSelections,
@@ -332,12 +333,15 @@ const ProcessAnalysis = () => {
   const loading = useAppSelector(selectProcessLoading);
   const error = useAppSelector(selectProcessError);
   const processData = useAppSelector(selectProcessData);
+  const moistureBlendList = useAppSelector(selectMoistureBlendList);
   const selections = useAppSelector(selectDropdownSelections);
   const dropdownData = useAppSelector(selectDropdownData);
 
   const period = selections.period;
+  const isMoisture = selections.processParameter?.toLowerCase() === "moisture";
 
   // On mount: set default selections from loaded dropdown data, then fire the initial fetch.
+  // For Moisture parameter, skip sensor/data fetch — ProcessFilters auto-fetches the blend list.
   // After this, the API is only called when the user clicks Apply.
   useEffect(() => {
     const unitList             = (dropdownData?.common?.units                    ?? []) as { value: string; label: string }[];
@@ -358,7 +362,10 @@ const ProcessAnalysis = () => {
     )?.value ?? "";
 
     const firstFamily = (machineToBlendMap[firstMachine] ?? [])[0]?.value ?? "CFT";
-    const firstParam  = unitToParamMap[firstUnit]?.[0]?.value ?? "Moisture";
+
+    // Always default to Humidity so the page loads with sensor data and no blend dropdowns.
+    // Moisture uses a two-step blend-list → trend flow; it is not auto-fetched on mount.
+    const firstParam = "Humidity";
 
     const defaults = {
       unit: firstUnit, line: firstLine, machine: firstMachine,
@@ -392,8 +399,25 @@ const ProcessAnalysis = () => {
       ) : (
         <div className="process-no-data">
           <BarChart3 className="process-no-data__icon" />
-          <p className="process-no-data__title">No Data Available</p>
-          <p className="process-no-data__sub">No records found for the selected filters. Try adjusting the period or parameters.</p>
+          {isMoisture ? (
+            <>
+              <p className="process-no-data__title">
+                {moistureBlendList.length === 0
+                  ? "No Blend Runs Found"
+                  : "Select a Blend Run"}
+              </p>
+              <p className="process-no-data__sub">
+                {moistureBlendList.length === 0
+                  ? "No blend runs were recorded in the selected period. Try a different time range."
+                  : "Choose a blend and a specific run from the filters above, then click Apply to view the moisture trend."}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="process-no-data__title">No Data Available</p>
+              <p className="process-no-data__sub">No records found for the selected filters. Try adjusting the period or parameters.</p>
+            </>
+          )}
         </div>
       )}
     </DashboardLayout>

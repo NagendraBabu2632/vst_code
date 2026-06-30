@@ -26,7 +26,9 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url: string = error.config?.url ?? "";
+    const isAuthEndpoint = url.includes("/auth/");
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("dfs_user");
       localStorage.removeItem("dfs_token");
       window.location.href = "/login";
@@ -448,6 +450,48 @@ export interface TariffBandPayload {
   ratePerKWH: number;
 }
 
+// ─── Moisture Trend Types ─────────────────────────────────────────────────────
+
+export interface MoistureBlendRun {
+  blendRunId: number;
+  startTime: number;
+  endTime: number | null;
+  startTimeLabel: string;
+  endTimeLabel: string | null;
+  runTime: string;
+  source: 'Auto' | 'Manual';
+  isRunning: boolean;
+}
+
+export interface MoistureBlendGroup {
+  blendId: number | null;
+  blendName: string;
+  runCount: number;
+  runs: MoistureBlendRun[];
+}
+
+export interface MoistureTrendResponse {
+  tagName: string;
+  machineName: string;
+  unit: string;
+  parameterType: string;
+  blendName: string;
+  startDate: string;
+  endDate: string;
+  dataPointCount: number;
+  avg: number;
+  sigma: number;
+  lsl: number | null;
+  usl: number | null;
+  target: number | null;
+  ucl: number | null;
+  lcl: number | null;
+  pp: number | null;
+  ppk: number | null;
+  specFound: boolean;
+  timeSeries: { timestamp: string; value: number }[];
+}
+
 // ─── Moisture Spec Types ──────────────────────────────────────────────────────
 
 export interface MoistureSpecDto {
@@ -481,6 +525,20 @@ export interface MoistureSpecPayload {
 // ─── Centralised API Service ──────────────────────────────────────────────────
 
 export const apiService = {
+
+  // ── Auth ─────────────────────────────────────────────────────────────────
+  async login(email: string, password: string) {
+    const res = await apiClient.post("/auth/login", { email, password });
+    return res.data as {
+      userId: number; username: string; email: string; role: string;
+      mustChangePassword: boolean; lastLoggedIn: string;
+    };
+  },
+
+  async changePassword(userId: number, oldPassword: string, newPassword: string) {
+    const res = await apiClient.post("/auth/change-password", { userId, oldPassword, newPassword });
+    return res.data as { message: string };
+  },
 
   // ── Dropdown / Master data ───────────────────────────────────────────────
   async fetchDropdownData() {
@@ -1031,6 +1089,29 @@ export const apiService = {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data as { saved: number; skipped: number; errors: string[] };
+  },
+
+  // ── Moisture Trend (In-Process Analysis) ──────────────────────────────────
+  async fetchMoistureBlendList(params: {
+    unit?: string;
+    machineId: number;
+    startDate: number;
+    endDate: number;
+    blendName?: string;
+  }) {
+    const res = await apiClient.get("/moisture/blend-list", { params });
+    return res.data as MoistureBlendGroup[];
+  },
+
+  async fetchMoistureTrend(params: {
+    unit?: string;
+    machineId: number;
+    blendName: string;
+    blendRunStartTime: number;
+    blendRunEndTime: number;
+  }) {
+    const res = await apiClient.get("/moisture/trend", { params });
+    return res.data as MoistureTrendResponse;
   },
 };
 

@@ -13,7 +13,15 @@ import {
   selectDropdownData,
   buildProcessPayload,
 } from "@/redux/slices/dropdownSlice";
-import { fetchProcessAnalysisData } from "@/redux/slices/processAnalysisSlice";
+import {
+  fetchProcessAnalysisData,
+  fetchMoistureBlendList,
+  fetchMoistureTrend,
+  selectMoistureBlendList,
+  selectMoistureBlendListLoading,
+  clearProcessData,
+} from "@/redux/slices/processAnalysisSlice";
+import type { MoistureBlendRun } from "@/services/api";
 
 const periodOptions = [
   { value: "lastHour",         label: "Last One Hour" },
@@ -21,15 +29,6 @@ const periodOptions = [
   { value: "customLast7",      label: "Custom Date Range (Last 7 Days)" },
   { value: "customHistorical", label: "Custom Date Range (Historical)" },
 ];
-
-// ── Seeded pseudo-random for stable run-time lists
-const seededRand = (seed: number) => {
-  let s = seed;
-  return () => {
-    s = (s * 9301 + 49297) % 233280;
-    return s / 233280;
-  };
-};
 
 const getPeriodRange = (period: string): { start: Date; end: Date } => {
   const now = new Date();
@@ -56,36 +55,30 @@ const getPeriodRange = (period: string): { start: Date; end: Date } => {
   }
 };
 
-const generateRunTimes = (family: string, period: string) => {
-  if (!family || !period) return [];
-  const { start, end } = getPeriodRange(period);
-  const seed =
-    family.split("").reduce((a, c) => a + c.charCodeAt(0), 0) * 31 +
-    period.length * 7;
-  const rand = seededRand(seed);
-  const span = end.getTime() - start.getTime();
-  const count =
-    period === "lastHour" || period === "today" ? 2
-    : period === "customLast7" || period === "last7" ? 4
-    : 6;
-
-  const runs: { start: Date; end: Date }[] = [];
-  for (let i = 0; i < count; i++) {
-    const slot = span / count;
-    const slotStart = start.getTime() + i * slot;
-    const offset = rand() * slot * 0.3;
-    const duration = (1 + rand() * 6) * 60 * 60 * 1000;
-    const s = new Date(slotStart + offset);
-    const e = new Date(Math.min(slotStart + offset + duration, end.getTime()));
-    runs.push({ start: s, end: e });
+const getMoistureEpochRange = (
+  period: string,
+  dateRangeFrom: string,
+  dateRangeTo: string
+): { startDate: number; endDate: number } => {
+  if (
+    (period === "customLast7" || period === "customHistorical") &&
+    dateRangeFrom &&
+    dateRangeTo
+  ) {
+    const toMs = (s: string) =>
+      new Date(s.includes(" ") ? s.replace(" ", "T") : `${s}T00:00:00`).getTime();
+    return { startDate: toMs(dateRangeFrom), endDate: toMs(dateRangeTo) };
   }
-  return runs.sort((a, b) => b.start.getTime() - a.start.getTime());
+  const { start, end } = getPeriodRange(period);
+  return { startDate: start.getTime(), endDate: end.getTime() };
 };
 
-const formatRun = (r: { start: Date; end: Date }) =>
-  `${format(r.start, "yyyy-MM-dd HH:mm:ss")} → ${format(r.end, "yyyy-MM-dd HH:mm:ss")}`;
+const formatApiRun = (r: MoistureBlendRun): string => {
+  const end = r.isRunning ? "Running…" : (r.endTimeLabel ?? "?");
+  return `${r.startTimeLabel} → ${end} (${r.runTime})`;
+};
 
-// ── Time spinner sub-component ─────────────────────────────────────────────────
+// ── TimeSpinner sub-component ─────────────────────────────────────────────────
 const TimeSpinner = ({
   value,
   max,
@@ -116,10 +109,7 @@ const TimeSpinner = ({
   </div>
 );
 
-// ── PeriodSelector — always fires onChange even when same option re-clicked ────
-// Radix Select deliberately skips onValueChange for the same value, which
-// prevents re-opening the custom date picker. This plain button-based dropdown
-// fires every time.
+// ── PeriodSelector ────────────────────────────────────────────────────────────
 const PeriodSelector = ({
   value,
   options,
@@ -242,7 +232,6 @@ const DateTimeRangePicker = ({
         <p className="dtrp-title">{title}</p>
 
         <div className="dtrp-panes">
-          {/* ── Start pane ── */}
           <div className="dtrp-pane">
             <DayPicker
               className="calendar-wrapper dtrp-calendar"
@@ -262,7 +251,6 @@ const DateTimeRangePicker = ({
 
           <div className="dtrp-divider" />
 
-          {/* ── End pane ── */}
           <div className="dtrp-pane">
             <DayPicker
               className="calendar-wrapper dtrp-calendar"
@@ -292,26 +280,28 @@ const DateTimeRangePicker = ({
 
 // ── ProcessFilters ─────────────────────────────────────────────────────────────
 const ProcessFilters = () => {
-  const dispatch   = useAppDispatch();
-  const selections = useAppSelector(selectDropdownSelections);
-  const dropdownData = useAppSelector(selectDropdownData);
+  const dispatch      = useAppDispatch();
+  const selections    = useAppSelector(selectDropdownSelections);
+  const dropdownData  = useAppSelector(selectDropdownData);
+  const blendList     = useAppSelector(selectMoistureBlendList);
+  const blendListLoading = useAppSelector(selectMoistureBlendListLoading);
 
-  const [runTime, setRunTime]       = useState<string>("");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<"last7" | "historical">("last7");
-  const prevPeriodRef               = useRef<string>(selections.period);
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [pickerOpen, setPickerOpen]       = useState(false);
+  const [pickerMode, setPickerMode]       = useState<"last7" | "historical">("last7");
+  const prevPeriodRef                     = useRef<string>(selections.period);
 
   // Resolve option lists from dropdown data
-  const units        = (dropdownData?.common?.units ?? []) as { value: string; label: string }[];
-  const unitToLineMap = (dropdownData?.common?.unitToLineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
+  const units          = (dropdownData?.common?.units ?? []) as { value: string; label: string }[];
+  const unitToLineMap  = (dropdownData?.common?.unitToLineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
   const lines = (
     selections.unit && unitToLineMap[selections.unit]
       ? unitToLineMap[selections.unit]
       : (dropdownData?.common?.lines ?? [])
   ) as { value: string; label: string }[];
 
-  const unitToParamMap = (dropdownData?.common?.unitToParamMapping ?? {}) as Record<string, { value: string; label: string }[]>;
-  const processParams = (
+  const unitToParamMap  = (dropdownData?.common?.unitToParamMapping  ?? {}) as Record<string, { value: string; label: string }[]>;
+  const processParams   = (
     selections.unit && unitToParamMap[selections.unit]
       ? unitToParamMap[selections.unit]
       : (dropdownData?.processAnalysis?.processParameter?.options ?? [])
@@ -319,6 +309,8 @@ const ProcessFilters = () => {
 
   const unitLineToMachineMap = (dropdownData?.common?.unitLineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
   const lineToMachineMap     = (dropdownData?.common?.lineToMachineMapping     ?? {}) as Record<string, { value: string; label: string }[]>;
+  const machineIdMap         = (dropdownData?.common?.machineIdMap             ?? {}) as Record<string, number>;
+
   const resolvedMachines = (unit: string, line: string) => {
     const key = `${unit}:${line}`;
     return unitLineToMachineMap[key] ?? lineToMachineMap[line] ?? [];
@@ -332,11 +324,6 @@ const ProcessFilters = () => {
   ) as { value: string; label: string }[];
 
   const machineToBlendMap = (dropdownData?.common?.machineToBlendMapping ?? {}) as Record<string, { value: string; label: string }[]>;
-  const machineBlends = (
-    selections.machine && machineToBlendMap[selections.machine]?.length
-      ? machineToBlendMap[selections.machine]
-      : (dropdownData?.common?.families ?? [])
-  ) as { value: string; label: string }[];
 
   const firstMachineWithBlends = (lineName: string): string => {
     const list = resolvedMachines(selections.unit, lineName);
@@ -346,19 +333,73 @@ const ProcessFilters = () => {
     );
   };
 
-  const runningCandidates = (dropdownData?.processAnalysis?.blendRunning?.options ?? []) as { value: string; label: string }[];
-  const availableBlendValues = new Set(machineBlends.map((b) => b.value));
-  const runningFamilies  = runningCandidates.filter((f) => availableBlendValues.has(f.value));
-  const runningValues    = new Set(runningFamilies.map((f) => f.value));
-  const nonRunningBlends = machineBlends.filter((f) => !runningValues.has(f.value));
+  const isMoisture = selections.processParameter?.toLowerCase() === "moisture";
+
+  // ── Moisture: derive blend groups and runs from API data
+  const runningApiBlends = useMemo(
+    () => blendList.filter((g) => g.runs.some((r) => r.isRunning)),
+    [blendList]
+  );
+  const runningApiValues  = useMemo(() => new Set(runningApiBlends.map((g) => g.blendName)), [runningApiBlends]);
+  const nonRunningApiBlends = useMemo(
+    () => blendList.filter((g) => !runningApiValues.has(g.blendName)),
+    [blendList, runningApiValues]
+  );
+
+  const selectedBlendGroup = useMemo(
+    () => blendList.find((g) => g.blendName === selections.family),
+    [blendList, selections.family]
+  );
+  const apiRuns: MoistureBlendRun[] = selectedBlendGroup?.runs ?? [];
 
   const set = (key: Parameters<typeof setDropdownSelection>[0]["key"]) =>
     (value: string) => dispatch(setDropdownSelection({ key, value }));
 
-  const runTimes = useMemo(
-    () => generateRunTimes(selections.family, selections.period),
-    [selections.family, selections.period]
-  );
+  // Resolved numeric ID for the currently selected machine — used as a stable dep below.
+  // Becomes defined only after dropdown master data loads from the API.
+  const currentMachineId = machineIdMap[selections.machine];
+
+  // ── Step 1: Fetch blend list whenever Moisture is selected and machine/period change.
+  // currentMachineId is in deps so this re-fires once the dropdown master data arrives
+  // (machineIdMap starts empty; the effect is skipped until a valid id is available).
+  useEffect(() => {
+    if (!isMoisture || !currentMachineId) return;
+    const { startDate, endDate } = getMoistureEpochRange(
+      selections.period, selections.dateRangeFrom, selections.dateRangeTo
+    );
+    dispatch(fetchMoistureBlendList({ unit: selections.unit, machineId: currentMachineId, startDate, endDate }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMoisture, currentMachineId, selections.machine, selections.unit, selections.period, selections.dateRangeFrom, selections.dateRangeTo]);
+
+  // ── Step 2: After blend list loads, auto-select the first blend if the
+  // current selection is missing from the new list.
+  useEffect(() => {
+    if (blendList.length === 0) return;
+    const isCurrentValid = blendList.some((g) => g.blendName === selections.family);
+    if (!isCurrentValid) {
+      dispatch(setDropdownSelection({ key: "family", value: blendList[0].blendName }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blendList]);
+
+  // ── Step 3: After available runs change (parameter switched to moisture, blend changed,
+  // or blend list refreshed), auto-select the first run and immediately load its trend.
+  useEffect(() => {
+    if (!isMoisture || !currentMachineId || !selections.family || apiRuns.length === 0) {
+      setSelectedRunId(null);
+      return;
+    }
+    const firstRun = apiRuns[0];
+    setSelectedRunId(firstRun.blendRunId);
+    dispatch(fetchMoistureTrend({
+      unit: selections.unit,
+      machineId: currentMachineId,
+      blendName: selections.family,
+      blendRunStartTime: firstRun.startTime,
+      blendRunEndTime: firstRun.endTime ?? Date.now(),
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiRuns]);
 
   // ── Period change handler
   const handlePeriodChange = (v: string) => {
@@ -368,13 +409,12 @@ const ProcessFilters = () => {
       setPickerOpen(true);
     } else {
       set("period")(v);
-      setRunTime("");
     }
   };
 
   const handlePickerConfirm = (from: string, to: string) => {
     const periodValue = pickerMode === "last7" ? "customLast7" : "customHistorical";
-    dispatch(setDropdownSelection({ key: "period",       value: periodValue }));
+    dispatch(setDropdownSelection({ key: "period",        value: periodValue }));
     dispatch(setDropdownSelection({ key: "dateRangeFrom", value: from }));
     dispatch(setDropdownSelection({ key: "dateRangeTo",   value: to }));
     setPickerOpen(false);
@@ -386,47 +426,62 @@ const ProcessFilters = () => {
 
   // ── Apply
   const handleApply = () => {
-    if (selections.unit !== "SMD" && !selections.family) {
-      toast.error("Please select a Blend");
-      return;
+    if (isMoisture) {
+      const machineId = machineIdMap[selections.machine];
+      if (!machineId) { toast.error("Machine ID not found — check dropdown data"); return; }
+      if (!selections.family) { toast.error("Please select a Blend"); return; }
+      if (selectedRunId === null) { toast.error("Please select a Blend Run"); return; }
+      const run = apiRuns.find((r) => r.blendRunId === selectedRunId);
+      if (!run) { toast.error("Selected run not found — try refreshing"); return; }
+      dispatch(fetchMoistureTrend({
+        unit: selections.unit,
+        machineId,
+        blendName: selections.family,
+        blendRunStartTime: run.startTime,
+        blendRunEndTime: run.endTime ?? Date.now(),
+      }));
+      toast.success("Loading moisture trend…", {
+        description: `${selections.machine} · ${selections.family} · ${run.startTimeLabel}`,
+      });
+    } else {
+      dispatch(fetchProcessAnalysisData(buildProcessPayload(selections)));
+      const periodLabel = periodOptions.find((p) => p.value === selections.period)?.label ?? selections.period;
+      const rangeLabel  = (selections.period === "customLast7" || selections.period === "customHistorical")
+        ? ` · ${selections.dateRangeFrom} → ${selections.dateRangeTo}`
+        : "";
+      toast.success("Filters applied", {
+        description: `${selections.processParameter} · ${periodLabel}${rangeLabel}`,
+      });
     }
-    dispatch(fetchProcessAnalysisData(buildProcessPayload(selections)));
-    const periodLabel = periodOptions.find((p) => p.value === selections.period)?.label ?? selections.period;
-    const rangeLabel  = (selections.period === "customLast7" || selections.period === "customHistorical")
-      ? ` · ${selections.dateRangeFrom} → ${selections.dateRangeTo}`
-      : "";
-    toast.success("Filters applied", {
-      description: `${selections.machine} · ${selections.family || "—"} · ${periodLabel}${rangeLabel}${runTime ? ` · ${runTime}` : " · All runs"}`,
-    });
   };
 
   // ── Reset
   const handleReset = () => {
-    const firstUnit    = units[0]?.value ?? "PMD";
-    const firstLine    = unitToLineMap[firstUnit]?.[0]?.value ?? "";
-    const firstMachine = firstMachineWithBlends(firstLine);
-    const firstBlend   = (machineToBlendMap[firstMachine] ?? [])[0]?.value ?? "";
+    const firstUnit = units[0]?.value ?? "PMD";
+    const firstLine = unitToLineMap[firstUnit]?.[0]?.value ?? "";
+    const firstMachine = resolvedMachines(firstUnit, firstLine)[0]?.value ?? "";
     set("unit")(firstUnit);
     set("line")(firstLine);
     set("machine")(firstMachine);
-    set("family")(firstBlend);
-    set("processParameter")(unitToParamMap[firstUnit]?.[0]?.value ?? "Moisture");
+    set("family")("");
+    set("processParameter")("Humidity");
     set("period")("lastHour");
-    setRunTime("");
+    dispatch(clearProcessData());
+    dispatch(fetchProcessAnalysisData(buildProcessPayload({
+      ...selections,
+      unit: firstUnit, line: firstLine, machine: firstMachine,
+      processParameter: "Humidity", family: "",
+    })));
   };
 
-  // Only restore saved dates when re-opening the SAME custom mode.
-  // Switching from customLast7 → historical must NOT carry over the 7-day range.
   const pickerMatchesCurrent =
-    (pickerMode === "last7"       && selections.period === "customLast7") ||
-    (pickerMode === "historical"  && selections.period === "customHistorical");
+    (pickerMode === "last7"      && selections.period === "customLast7") ||
+    (pickerMode === "historical" && selections.period === "customHistorical");
 
   const pickerInitialFrom = pickerMatchesCurrent && selections.dateRangeFrom
     ? new Date(selections.dateRangeFrom) : undefined;
   const pickerInitialTo   = pickerMatchesCurrent && selections.dateRangeTo
     ? new Date(selections.dateRangeTo)   : undefined;
-
-  const isMoisture = selections.processParameter?.toLowerCase() === "moisture";
 
   return (
     <div className="process-filters">
@@ -437,12 +492,12 @@ const ProcessFilters = () => {
           value: selections.unit,
           setter: (v: string) => {
             const fl = unitToLineMap[v]?.[0]?.value ?? "";
-            const fm = firstMachineWithBlends(fl);
+            const fm = resolvedMachines(v, fl)[0]?.value ?? "";
             set("unit")(v);
             set("line")(fl);
             set("machine")(fm);
-            set("family")((machineToBlendMap[fm] ?? [])[0]?.value ?? "");
-            set("processParameter")(unitToParamMap[v]?.[0]?.value ?? "Moisture");
+            set("family")("");
+            set("processParameter")(unitToParamMap[v]?.[0]?.value ?? "Humidity");
           },
           opts: units.map((u) => ({ value: u.value, label: u.label })),
         },
@@ -453,26 +508,37 @@ const ProcessFilters = () => {
             const fm = firstMachineWithBlends(v);
             set("line")(v);
             set("machine")(fm);
-            set("family")((machineToBlendMap[fm] ?? [])[0]?.value ?? "");
+            if (isMoisture) set("family")((machineToBlendMap[fm] ?? [])[0]?.value ?? "");
           },
-          opts: lines.map((l) => ({ value: l.value, label: l.label })),
+          opts: lines,
         },
         {
           label: "Machine Name",
           value: selections.machine,
           setter: (v: string) => {
             set("machine")(v);
-            set("family")((machineToBlendMap[v] ?? [])[0]?.value ?? "");
-            setRunTime("");
+            if (isMoisture) {
+              set("family")((machineToBlendMap[v] ?? [])[0]?.value ?? "");
+            }
           },
-          opts: machines.map((m) => ({ value: m.value, label: m.label })),
+          opts: machines,
         },
         {
           label: "Parameter Name",
           value: selections.processParameter,
           setter: (v: string) => {
             set("processParameter")(v);
-            dispatch(fetchProcessAnalysisData(buildProcessPayload({ ...selections, processParameter: v })));
+            if (v.toLowerCase() !== "moisture") {
+              // Reset to first line/machine and immediately fetch sensor data
+              const resetLine = unitToLineMap[selections.unit]?.[0]?.value ?? "";
+              const resetMachine = resolvedMachines(selections.unit, resetLine)[0]?.value ?? "";
+              set("line")(resetLine);
+              set("machine")(resetMachine);
+              dispatch(fetchProcessAnalysisData(buildProcessPayload({
+                ...selections, processParameter: v, line: resetLine, machine: resetMachine,
+              })));
+            }
+            // For moisture: the blend-list effect (Step 1) fires automatically
           },
           opts: processParams.map((p) => ({ value: p.value, label: p.label })),
         },
@@ -501,20 +567,24 @@ const ProcessFilters = () => {
       {/* ── Blend — only for Moisture parameter */}
       {isMoisture && (
         <div className="process-filter-field--family">
-          <label className="process-filter-label">Blend</label>
+          <label className="process-filter-label">
+            Blend
+            {blendListLoading && <span className="process-filter-badge--count">…</span>}
+          </label>
           <Dropdown
             value={selections.family}
-            onValueChange={(v) => { set("family")(v); setRunTime(""); }}
-            placeholder="Select blend…"
+            onValueChange={(v) => { set("family")(v); setSelectedRunId(null); }}
+            placeholder={blendListLoading ? "Loading blends…" : "Select blend…"}
           >
-            {runningFamilies.length > 0 && (
+            {/* Running blends */}
+            {runningApiBlends.length > 0 && (
               <>
                 <div className="process-filter-group-header">Running</div>
-                {runningFamilies.map((f) => (
-                  <DropdownItem key={f.value} value={f.value}>
+                {runningApiBlends.map((g) => (
+                  <DropdownItem key={g.blendName} value={g.blendName}>
                     <span className="process-filter-option-row">
                       <span className="process-filter-dot process-filter-dot--success" />
-                      {f.label}
+                      {g.blendName}
                       <span className="process-filter-badge--running">Running</span>
                     </span>
                   </DropdownItem>
@@ -522,36 +592,37 @@ const ProcessFilters = () => {
                 <div className="process-filter-group-header--divided">All Blends</div>
               </>
             )}
-            {nonRunningBlends.map((f) => (
-              <DropdownItem key={f.value} value={f.value}>{f.label}</DropdownItem>
+            {nonRunningApiBlends.map((g) => (
+              <DropdownItem key={g.blendName} value={g.blendName}>{g.blendName}</DropdownItem>
             ))}
           </Dropdown>
         </div>
       )}
 
-      {/* ── Blend Run Times */}
-      {isMoisture && selections.family && selections.period && runTimes.length > 0 && (
+      {/* ── Blend Run — only for Moisture, only when a blend is selected */}
+      {isMoisture && selections.family && (
         <div className="process-filter-field--runtimes">
           <label className="process-filter-run-label">
             <Clock className="process-filter-run-label__icon" />
-            Blend Run Times
-            <span className="process-filter-badge--count">{runTimes.length}</span>
+            Blend Run
+            {apiRuns.length > 0 && (
+              <span className="process-filter-badge--count">{apiRuns.length}</span>
+            )}
           </label>
           <Dropdown
-            value={runTime}
-            onValueChange={setRunTime}
-            placeholder="All runs in period"
-            contentClassName="max-w-[400px]"
+            value={selectedRunId !== null ? String(selectedRunId) : ""}
+            onValueChange={(v) => setSelectedRunId(Number(v))}
+            placeholder={blendListLoading ? "Loading runs…" : "Select a run…"}
+            contentClassName="max-w-[420px]"
           >
-            <DropdownItem value="all">
-              <span className="process-filter-option-row">
-                <span className="process-filter-dot process-filter-dot--primary" />
-                All runs in period
-              </span>
-            </DropdownItem>
-            {runTimes.map((r, i) => (
-              <DropdownItem key={i} value={formatRun(r)}>
-                <span className="process-filter-run-text">{formatRun(r)}</span>
+            {apiRuns.map((r) => (
+              <DropdownItem key={r.blendRunId} value={String(r.blendRunId)}>
+                <span className="process-filter-run-text">
+                  {formatApiRun(r)}
+                  {r.isRunning && (
+                    <span className="process-filter-badge--running">Running</span>
+                  )}
+                </span>
               </DropdownItem>
             ))}
           </Dropdown>
