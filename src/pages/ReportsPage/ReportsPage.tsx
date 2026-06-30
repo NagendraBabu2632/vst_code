@@ -7,11 +7,13 @@ import { motion } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
 import {
   fetchReportData,
+  fetchProcessParamReportData,
   selectReportsLoading,
   selectReportsError,
   selectEnergyReportItems,
   selectAlertReportItems,
   selectProductionReportItems,
+  selectProcessParamReportItems,
 } from "@/redux/slices/reportsSlice";
 import {
   setDropdownSelection,
@@ -45,7 +47,7 @@ const PAGE_SIZE = 10;
 const statusClass = (status: string) =>
   status === "Normal" || status === "Acknowledged"
     ? "status-normal"
-    : status === "Critical"
+    : status === "Critical" || status === "Breach"
     ? "status-critical"
     : "status-warning";
 
@@ -63,6 +65,7 @@ const ReportsPage = () => {
   const energyItems      = useAppSelector(selectEnergyReportItems);
   const alertItems       = useAppSelector(selectAlertReportItems);
   const productionItems  = useAppSelector(selectProductionReportItems);
+  const processParamItems = useAppSelector(selectProcessParamReportItems);
   const selections       = useAppSelector(selectDropdownSelections);
   const dropdownData     = useAppSelector(selectDropdownData);
 
@@ -93,6 +96,7 @@ const ReportsPage = () => {
 
   const unitLineToMachineMap = (dropdownData?.common?.unitLineToMachineMapping ?? {}) as Record<string, { value: string; label: string }[]>;
   const lineToMachineMap     = (dropdownData?.common?.lineToMachineMapping     ?? {}) as Record<string, { value: string; label: string }[]>;
+  const machineIdMap         = (dropdownData?.common?.machineIdMap             ?? {}) as Record<string, number>;
   const machineOpts = (
     selections.unit && selections.line && unitLineToMachineMap[`${selections.unit}:${selections.line}`]
       ? unitLineToMachineMap[`${selections.unit}:${selections.line}`]
@@ -149,6 +153,22 @@ const ReportsPage = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, reportType, selections.unit, selections.period, selections.dateRangeFrom, selections.dateRangeTo, filterParam]);
 
+  // Fetch process params report (temperature / humidity / moisture)
+  useEffect(() => {
+    if (reportType !== "process" || !filterParam) return;
+    const { startDate: sd, endDate: ed } = buildReportsEpochPayload(selections);
+    const isMoisture = filterParam.toLowerCase() === "moisture";
+    if (isMoisture) {
+      const machineId = machineIdMap[selections.machine];
+      if (machineId === undefined) return;
+      dispatch(fetchProcessParamReportData({ parameter: "moisture", machineId, startDate: sd, endDate: ed }));
+    } else {
+      if (!selections.unit) return;
+      dispatch(fetchProcessParamReportData({ parameter: filterParam.toLowerCase(), unit: selections.unit, startDate: sd, endDate: ed }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, reportType, filterParam, selections.unit, selections.machine, selections.period, selections.dateRangeFrom, selections.dateRangeTo]);
+
   const energyTableData = useMemo(() => {
     let data = energyItems.map((item) => ({
       timestamp:  item.timestamp,
@@ -194,10 +214,35 @@ const ReportsPage = () => {
     return data;
   }, [productionItems, searchQuery]);
 
+  const processTableData = useMemo(() => {
+    let data = processParamItems
+      .filter((item) => item.status !== "No Spec")
+      .map((item) => ({
+        timestamp: item.timestamp,
+        parameter: item.parameter,
+        blendName: item.blendName,
+        value:     item.value,
+        lsl:       item.lsl,
+        usl:       item.usl,
+        target:    item.target,
+        status:    item.status,
+      }));
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      data = data.filter((d) =>
+        d.timestamp.toLowerCase().includes(q) ||
+        d.parameter.toLowerCase().includes(q) ||
+        (d.blendName ?? "").toLowerCase().includes(q)
+      );
+    }
+    return data;
+  }, [processParamItems, searchQuery]);
+
   const currentTableData =
     reportType === "energy"     ? energyTableData :
     reportType === "alerts"     ? alertsTableData :
     reportType === "production" ? productionTableData :
+    reportType === "process"    ? processTableData :
     [];
 
   const totalPages = Math.max(1, Math.ceil(currentTableData.length / PAGE_SIZE));
@@ -211,31 +256,42 @@ const ReportsPage = () => {
   }, [reportType, selections.unit]);
 
   const handleDownloadExcel = useCallback(async () => {
-    const reportName = REPORT_NAME_MAP[reportType];
-    if (!reportName) return;
     setExporting(true);
     try {
       const { unit, startDate: sd, endDate: ed } = buildReportsEpochPayload(selections);
-      const blob = await apiService.downloadReport({
-        reportName,
-        unit,
-        startDate: sd,
-        endDate: ed,
-        parameter: filterParam,
-      });
-      const url = URL.createObjectURL(blob);
-      const a   = document.createElement("a");
-      a.href     = url;
-      a.download = `${getFileName()}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (reportType === "process") {
+        const isMoisture = filterParam.toLowerCase() === "moisture";
+        const blob = await apiService.downloadProcessParamReport({
+          parameter:  filterParam.toLowerCase(),
+          unit:       !isMoisture ? unit : undefined,
+          machineId:  isMoisture ? machineIdMap[selections.machine] : undefined,
+          startDate:  sd,
+          endDate:    ed,
+        });
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement("a");
+        a.href     = url;
+        a.download = `${getFileName()}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const reportName = REPORT_NAME_MAP[reportType];
+        if (!reportName) return;
+        const blob = await apiService.downloadReport({ reportName, unit, startDate: sd, endDate: ed, parameter: filterParam });
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement("a");
+        a.href     = url;
+        a.download = `${getFileName()}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
       toast.success("Report downloaded", { description: `${getFileName()}.xlsx` });
     } catch {
       toast.error("Download failed");
     } finally {
       setExporting(false);
     }
-  }, [reportType, selections, filterParam, getFileName]);
+  }, [reportType, selections, filterParam, machineIdMap, getFileName]);
 
   const buildCSVContent = useCallback(() => {
     if (reportType === "energy") {
@@ -247,9 +303,17 @@ const ReportsPage = () => {
     } else if (reportType === "production") {
       return ["Date,Output (M-Sticks),Energy (kWh),Energy/Unit",
         ...productionTableData.map((d) => `${d.date},${d.outputMSticks},${d.energyKWH},${d.energyPerUnit}`)].join("\n");
+    } else if (reportType === "process") {
+      const isMoisture = filterParam.toLowerCase() === "moisture";
+      if (isMoisture) {
+        return ["Timestamp,Parameter,Blend,Value,LSL,USL,Target,Status",
+          ...processTableData.map((d: any) => `${d.timestamp},${d.parameter},${d.blendName ?? ""},${d.value},${d.lsl ?? ""},${d.usl ?? ""},${d.target ?? ""},${d.status}`)].join("\n");
+      }
+      return ["Timestamp,Parameter,Value,LSL,USL,Target,Status",
+        ...processTableData.map((d: any) => `${d.timestamp},${d.parameter},${d.value},${d.lsl ?? ""},${d.usl ?? ""},${d.target ?? ""},${d.status}`)].join("\n");
     }
     return "";
-  }, [reportType, energyTableData, alertsTableData, productionTableData]);
+  }, [reportType, energyTableData, alertsTableData, productionTableData, processTableData, filterParam]);
 
   const handleExportPDF = useCallback(() => {
     setExporting(true);
@@ -282,7 +346,7 @@ const ReportsPage = () => {
           <Button variant="outline" size="sm" className="reports-btn-sm" onClick={handleExportPDF} disabled={exporting}>
             {exporting ? <Loader2 className="animate-spin" /> : <FileText />}PDF
           </Button>
-          <Button variant="outline" size="sm" className="reports-btn-sm" onClick={handleDownloadExcel} disabled={exporting || !REPORT_NAME_MAP[reportType]}>
+          <Button variant="outline" size="sm" className="reports-btn-sm" onClick={handleDownloadExcel} disabled={exporting || (!REPORT_NAME_MAP[reportType] && reportType !== "process")}>
             {exporting ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />}Excel
           </Button>
         </div>
@@ -425,9 +489,47 @@ const ReportsPage = () => {
             </TabsContent>
 
             <TabsContent value="process">
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container">
-                <div className="alerts-empty">No process report data available</div>
-              </motion.div>
+              {filterParam.toLowerCase() === "moisture"
+                ? renderTable(
+                    [
+                      { label: "Timestamp" }, { label: "Parameter" }, { label: "Blend" },
+                      { label: "Value", align: "right" }, { label: "LSL", align: "right" },
+                      { label: "USL", align: "right" }, { label: "Target", align: "right" },
+                      { label: "Status" },
+                    ],
+                    (d: any, i: number) => (
+                      <tr key={i}>
+                        <td className="mono">{d.timestamp}</td>
+                        <td className="medium">{d.parameter}</td>
+                        <td className="medium">{d.blendName ?? "—"}</td>
+                        <td className="mono-strong right">{d.value?.toFixed(4)}</td>
+                        <td className="mono right">{d.lsl ?? "—"}</td>
+                        <td className="mono right">{d.usl ?? "—"}</td>
+                        <td className="mono right">{d.target ?? "—"}</td>
+                        <td><span className={statusClass(d.status)}>{d.status}</span></td>
+                      </tr>
+                    )
+                  )
+                : renderTable(
+                    [
+                      { label: "Timestamp" }, { label: "Parameter" },
+                      { label: "Value", align: "right" }, { label: "LSL", align: "right" },
+                      { label: "USL", align: "right" }, { label: "Target", align: "right" },
+                      { label: "Status" },
+                    ],
+                    (d: any, i: number) => (
+                      <tr key={i}>
+                        <td className="mono">{d.timestamp}</td>
+                        <td className="medium">{d.parameter}</td>
+                        <td className="mono-strong right">{d.value?.toFixed(4)}</td>
+                        <td className="mono right">{d.lsl ?? "—"}</td>
+                        <td className="mono right">{d.usl ?? "—"}</td>
+                        <td className="mono right">{d.target ?? "—"}</td>
+                        <td><span className={statusClass(d.status)}>{d.status}</span></td>
+                      </tr>
+                    )
+                  )
+              }
             </TabsContent>
 
             <TabsContent value="alerts">

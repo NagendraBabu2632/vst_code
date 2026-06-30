@@ -72,6 +72,32 @@ export interface ExecTopConsumersData {
   items: ExecConsumerItem[];
 }
 
+export interface ExecAlertSummary {
+  total: number;
+  critical: number;
+  warning: number;
+  acknowledged: number;
+}
+
+export interface ExecHumidityData {
+  pmd: number;
+  smd: number;
+  total: number;
+}
+
+export interface ExecMoistureItem {
+  machineId: number;
+  location: string;
+  line: string;
+  tagName: string;
+  avgMoisture: number | null;
+}
+
+export interface ExecHumidityMoistureData {
+  humidity: ExecHumidityData;
+  moisture: ExecMoistureItem[];
+}
+
 
 export const dashboardApi = {
   async getKpiData(): Promise<KpiData> {

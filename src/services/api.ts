@@ -1,17 +1,8 @@
 import axios from "axios";
-import {
-  kpiData,
-  energyTrendData,
-  equipmentEnergyData,
-  alertsData,
-  processData,
-} from "@/data/mockData";
-import { energyTree as energyTreeMock } from "@/data/energyTreeData";
 import type { EnergyTreeUnit, EnergyTreeLine, EnergyTreeAsset } from "@/data/energyTreeData";
 import DROPDOWN_DATA from "@/data/dropdownData";
 import PAGE_DATA from "@/data/pageData";
 import {
-  EXEC_MOCK,
   EXEC_ENDPOINTS,
   buildExecParams,
 } from "@/data/executiveApiConfig";
@@ -260,6 +251,17 @@ export interface ProductionReportItem {
   energyPerUnit: number;
 }
 
+export interface ProcessParamReportItem {
+  timestamp: string;
+  parameter: string;
+  blendName: string | null;
+  value: number;
+  lsl: number | null;
+  usl: number | null;
+  target: number | null;
+  status: "Normal" | "Breach" | "No Spec";
+}
+
 // ─── Alert Rules Types ────────────────────────────────────────────────────────
 
 export interface AlertRuleApi {
@@ -317,14 +319,27 @@ export interface MoisturePosition {
 }
 
 export interface BlendRunLog {
+  slNo: number;
   id: number;
+  machineId: number;
+  machineName: string;
+  blendId: number | null;
   blendName: string;
-  blendId: number;
   startTime: string;
   endTime: string | null;
-  machine: string;
+  source: "Manual" | "Auto";
+  runTime: string;
+  isRunning: boolean;
+  canEdit: boolean;
+}
+
+export interface BlendRunPayload {
   machineId: number;
-  overrideStatus?: boolean;
+  blendId: number | null;
+  blendName: string;
+  startTimeMs: number;
+  endTimeMs: number | null;
+  overrideStatus: boolean;
 }
 
 // ─── Sensor Target Types ──────────────────────────────────────────────────────
@@ -393,6 +408,36 @@ export interface TariffBandPayload {
   ratePerKWH: number;
 }
 
+// ─── Moisture Spec Types ──────────────────────────────────────────────────────
+
+export interface MoistureSpecDto {
+  id: number;
+  machineId: number;
+  machineName: string;
+  blendId: number;
+  blendName: string;
+  year: number;
+  quarter: number;
+  quarterLabel: string;
+  lsl: number;
+  usl: number;
+  target: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface MoistureSpecPayload {
+  machineId: number;
+  blendId: number;
+  year: number;
+  quarter: number;
+  lsl: number;
+  usl: number;
+  target: number;
+  isActive?: boolean;
+}
+
 // ─── Centralised API Service ──────────────────────────────────────────────────
 
 export const apiService = {
@@ -435,64 +480,48 @@ export const apiService = {
 
   // ── Executive Summary — individual endpoint methods ──────────────────────
   async fetchExecSummary(params: Record<string, any>) {
-    console.log("[Exec] GET", EXEC_ENDPOINTS.SUMMARY, "params →", params);
-    try {
-      const res = await execClient.get(EXEC_ENDPOINTS.SUMMARY, { params });
-      console.log("[Exec] Response", EXEC_ENDPOINTS.SUMMARY, "→", res.data);
-      return res.data;
-    } catch (err) {
-      console.warn("[Exec] Falling back to mock for", EXEC_ENDPOINTS.SUMMARY, err);
-      return EXEC_MOCK.summary;
-    }
+    const res = await execClient.get(EXEC_ENDPOINTS.SUMMARY, { params });
+    return res.data;
   },
 
   async fetchExecSec(params: Record<string, any>) {
-    console.log("[Exec] GET", EXEC_ENDPOINTS.SEC, "params →", params);
-    try {
-      const res = await execClient.get(EXEC_ENDPOINTS.SEC, { params });
-      console.log("[Exec] Response", EXEC_ENDPOINTS.SEC, "→", res.data);
-      return res.data;
-    } catch (err) {
-      console.warn("[Exec] Falling back to mock for", EXEC_ENDPOINTS.SEC, err);
-      return EXEC_MOCK.sec;
-    }
+    const res = await execClient.get(EXEC_ENDPOINTS.SEC, { params });
+    return res.data;
   },
 
   async fetchExecTrend(params: Record<string, any>) {
-    console.log("[Exec] GET", EXEC_ENDPOINTS.TREND, "params →", params);
-    try {
-      const res = await execClient.get(EXEC_ENDPOINTS.TREND, { params });
-      console.log("[Exec] Response", EXEC_ENDPOINTS.TREND, "→", res.data);
-      return res.data;
-    } catch (err) {
-      console.warn("[Exec] Falling back to mock for", EXEC_ENDPOINTS.TREND, err);
-      return params.period === "day" ? EXEC_MOCK.trendDay : EXEC_MOCK.trendWeekMonth;
-    }
+    const res = await execClient.get(EXEC_ENDPOINTS.TREND, { params });
+    return res.data;
   },
 
   async fetchExecTopConsumers(params: Record<string, any>) {
-    console.log("[Exec] GET", EXEC_ENDPOINTS.TOP_CONSUMERS, "params →", params);
-    try {
-      const res = await execClient.get(EXEC_ENDPOINTS.TOP_CONSUMERS, { params });
-      console.log("[Exec] Response", EXEC_ENDPOINTS.TOP_CONSUMERS, "→", res.data);
-      return res.data;
-    } catch (err) {
-      console.warn("[Exec] Falling back to mock for", EXEC_ENDPOINTS.TOP_CONSUMERS, err);
-      return params.kpitype === "pollution" ? EXEC_MOCK.pollution : EXEC_MOCK.top5;
-    }
+    const res = await execClient.get(EXEC_ENDPOINTS.TOP_CONSUMERS, { params });
+    return res.data;
   },
 
-  // ── Executive Summary — combined (calls all 4 endpoints in parallel) ─────
+  async fetchExecAlertSummary(params: Record<string, any>) {
+    const res = await execClient.get(EXEC_ENDPOINTS.ALERT_SUMMARY, { params });
+    return res.data;
+  },
+
+  async fetchExecHumidityMoisture(params: Record<string, any>) {
+    const res = await execClient.get(EXEC_ENDPOINTS.HUMIDITY_MOISTURE, { params });
+    return res.data;
+  },
+
+  // ── Executive Summary — combined (calls all 6 endpoints in parallel) ─────
   async fetchExecutiveSummaryData(payload?: ExecApiPayload) {
     const params = buildExecParams(payload ?? { dateFilter: "day", dateRange: { from: "", to: "" } });
-    const [summary, sec, trend, top5, pollution] = await Promise.all([
+    const [summary, sec, trend, top5, pollution, alertSummary, humidityMoisture] = await Promise.all([
       this.fetchExecSummary(params),
       this.fetchExecSec(params),
       this.fetchExecTrend(params),
       this.fetchExecTopConsumers({ ...params, kpitype: "top5" }),
       this.fetchExecTopConsumers({ ...params, kpitype: "pollution" }),
+      this.fetchExecAlertSummary(params),
+      this.fetchExecHumidityMoisture(params),
     ]);
-    return { summary, sec, trend, top5, pollution };
+    return { summary, sec, trend, top5, pollution, alertSummary, humidityMoisture };
   },
 
   // ── Energy Monitoring ────────────────────────────────────────────────────
@@ -513,18 +542,10 @@ export const apiService = {
       shift_detail,
     };
 
-    console.log("[Energy Monitoring] GET /energy-monitoring params →", params);
-    try {
-      const res = await execClient.get("/energy-monitoring", { params });
-      console.log("[Energy Monitoring] Response →", res.data);
-      const { tree, slotLabels, shiftLabels } = transformEnergyResponse(res.data);
-      const { summaryMetrics } = PAGE_DATA.energyMonitoring;
-      return { energyTree: tree, summaryMetrics, hourLabels: slotLabels, shiftLabels };
-    } catch (err) {
-      console.warn("[Energy Monitoring] API unavailable, falling back to mock data", err);
-      const { summaryMetrics, hourLabels } = PAGE_DATA.energyMonitoring;
-      return { energyTree: energyTreeMock, summaryMetrics, hourLabels, shiftLabels: [] };
-    }
+    const res = await execClient.get("/energy-monitoring", { params });
+    const { tree, slotLabels, shiftLabels } = transformEnergyResponse(res.data);
+    const { summaryMetrics } = PAGE_DATA.energyMonitoring;
+    return { energyTree: tree, summaryMetrics, hourLabels: slotLabels, shiftLabels };
   },
 
   // ── Process Analysis — download ──────────────────────────────────────────
@@ -590,38 +611,31 @@ export const apiService = {
       family:        payload?.family          ?? "null",
     };
 
-    console.log("[Process Analysis] GET /sensor/data params →", params);
-    try {
-      const res = await execClient.get("/sensor/data", { params });
-      const raw = res.data;
-      const paramKey = (raw.parameterType as string).toLowerCase();
+    const res = await execClient.get("/sensor/data", { params });
+    const raw = res.data;
+    const paramKey = (raw.parameterType as string).toLowerCase();
 
-      const pd: any[] = (raw.timeSeries ?? []).map((p: any, i: number) => ({
-        time: String(i + 1),
-        timestamp: p.timestamp,
-        moisture: 0,
-        humidity: 0,
-        temperature: 0,
-        [paramKey]: p.value,
-        moistureTarget: 12.5, moistureLSL: 11, moistureUSL: 14, moistureLCL: 11.5, moistureUCL: 13.5,
-        humidityTarget: 58, humidityLSL: 50, humidityUSL: 65, humidityLCL: 52, humidityUCL: 63,
-        temperatureTarget: 31, temperatureLSL: 27, temperatureUSL: 35, temperatureLCL: 28, temperatureUCL: 34,
-      }));
+    const pd: any[] = (raw.timeSeries ?? []).map((p: any, i: number) => ({
+      time: String(i + 1),
+      timestamp: p.timestamp,
+      moisture: 0,
+      humidity: 0,
+      temperature: 0,
+      [paramKey]: p.value,
+      moistureTarget: 12.5, moistureLSL: 11, moistureUSL: 14, moistureLCL: 11.5, moistureUCL: 13.5,
+      humidityTarget: 58, humidityLSL: 50, humidityUSL: 65, humidityLCL: 52, humidityUCL: 63,
+      temperatureTarget: 31, temperatureLSL: 27, temperatureUSL: 35, temperatureLCL: 28, temperatureUCL: 34,
+    }));
 
-      const limit = { target: raw.target, lsl: raw.lsl, usl: raw.usl, lcl: raw.lcl, ucl: raw.ucl };
-      const controlLimits = {
-        moisture:    paramKey === "moisture"    ? limit : { target: 12.5, lsl: 11, usl: 14, lcl: 11.5, ucl: 13.5 },
-        temperature: paramKey === "temperature" ? limit : { target: 31, lsl: 27, usl: 35, lcl: 28, ucl: 34 },
-        humidity:    paramKey === "humidity"    ? limit : { target: 58, lsl: 50, usl: 65, lcl: 52, ucl: 63 },
-      };
-      const sensorStats = { avg: raw.avg, sigma: raw.sigma, pp: raw.pp, ppk: raw.ppk, dataPointCount: raw.dataPointCount };
-      const { parameters } = PAGE_DATA.processAnalysis;
-      return { processData: pd, parameters, controlLimits, sensorStats };
-    } catch (err) {
-      console.warn("[Process Analysis] API unavailable, falling back to mock data", err);
-      const { parameters, controlLimits } = PAGE_DATA.processAnalysis;
-      return { processData, parameters, controlLimits, sensorStats: null };
-    }
+    const limit = { target: raw.target, lsl: raw.lsl, usl: raw.usl, lcl: raw.lcl, ucl: raw.ucl };
+    const controlLimits = {
+      moisture:    paramKey === "moisture"    ? limit : { target: 12.5, lsl: 11, usl: 14, lcl: 11.5, ucl: 13.5 },
+      temperature: paramKey === "temperature" ? limit : { target: 31, lsl: 27, usl: 35, lcl: 28, ucl: 34 },
+      humidity:    paramKey === "humidity"    ? limit : { target: 58, lsl: 50, usl: 65, lcl: 52, ucl: 63 },
+    };
+    const sensorStats = { avg: raw.avg, sigma: raw.sigma, pp: raw.pp, ppk: raw.ppk, dataPointCount: raw.dataPointCount };
+    const { parameters } = PAGE_DATA.processAnalysis;
+    return { processData: pd, parameters, controlLimits, sensorStats };
   },
 
   // ── Alerts ───────────────────────────────────────────────────────────────
@@ -669,27 +683,63 @@ export const apiService = {
     return res.data as Blob;
   },
 
+  async fetchProcessParamReport(params: {
+    parameter: string;
+    unit?: string;
+    machineId?: number;
+    startDate: number;
+    endDate: number;
+  }) {
+    const p: Record<string, any> = {
+      reportName: "processparams",
+      parameter: params.parameter.toLowerCase(),
+      startDate: params.startDate,
+      endDate: params.endDate,
+    };
+    if (params.unit) p.unit = params.unit;
+    if (params.machineId !== undefined) p.machineId = params.machineId;
+    const res = await apiClient.get("/reports", { params: p });
+    return res.data as ProcessParamReportItem[];
+  },
+
+  async downloadProcessParamReport(params: {
+    parameter: string;
+    unit?: string;
+    machineId?: number;
+    startDate: number;
+    endDate: number;
+  }) {
+    const p: Record<string, any> = {
+      reportName: "processparams",
+      parameter: params.parameter.toLowerCase(),
+      startDate: params.startDate,
+      endDate: params.endDate,
+    };
+    if (params.unit) p.unit = params.unit;
+    if (params.machineId !== undefined) p.machineId = params.machineId;
+    const res = await apiClient.get("/reports/download", { params: p, responseType: "blob" });
+    return res.data as Blob;
+  },
+
   // ── Moisture / Blend Override ─────────────────────────────────────────────
   async fetchMoisturePositions(params?: { unit?: string; line?: string }) {
     const res = await apiClient.get("/moisture/positions", { params });
     return res.data as MoisturePosition[];
   },
 
-  async fetchBlendRunLogs(params?: { unit?: string; machine?: string }) {
-    const res = await apiClient.get("/moisture/blend-run", { params });
+  async fetchBlendRunLogs() {
+    const res = await execClient.get("/moisture/blend-runs");
     return res.data as BlendRunLog[];
   },
 
-  async addBlendRunLog(payload: {
-    machineId: number;
-    blendId: number;
-    blendName: string;
-    startDate: string;
-    endDate?: string;
-    overrideStatus?: boolean;
-  }) {
-    const res = await apiClient.post("/moisture/blend-run", payload);
-    return res.data;
+  async addBlendRunLog(payload: BlendRunPayload) {
+    const res = await execClient.post("/moisture/blend-runs", payload);
+    return res.data as { message: string; id: number };
+  },
+
+  async updateBlendRunLog(id: number, payload: BlendRunPayload) {
+    const res = await execClient.put(`/moisture/blend-runs/${id}`, payload);
+    return res.data as { message: string };
   },
 
   async applyBlendOverride(machineId: number, payload: { blendId: number; blendName: string }) {
@@ -863,6 +913,58 @@ export const apiService = {
   async deleteTariffBand(tariffId: number, bandId: number) {
     const res = await apiClient.delete(`/tariff/${tariffId}/bands/${bandId}`);
     return res.data as { message: string };
+  },
+
+  // ── Moisture Parameter Specs ──────────────────────────────────────────────
+  async fetchActiveMoistureSpecs() {
+    const res = await apiClient.get("/moisture-spec/active");
+    return res.data as MoistureSpecDto[];
+  },
+
+  async fetchFilteredMoistureSpecs(params?: {
+    machineId?: number;
+    blendId?: number;
+    year?: number;
+    quarter?: number;
+    isActive?: boolean;
+  }) {
+    const res = await apiClient.get("/moisture-spec", { params });
+    return res.data as MoistureSpecDto[];
+  },
+
+  async upsertMoistureSpec(payload: MoistureSpecPayload) {
+    const res = await apiClient.post("/moisture-spec", payload);
+    return res.data as MoistureSpecDto;
+  },
+
+  async toggleMoistureSpec(id: number, value: boolean) {
+    const res = await apiClient.patch(`/moisture-spec/${id}/active`, null, { params: { value } });
+    return res.data as { id: number; isActive: boolean };
+  },
+
+  async deleteMoistureSpec(id: number) {
+    const res = await apiClient.delete(`/moisture-spec/${id}`);
+    return res.data as { message: string };
+  },
+
+  async downloadMoistureSpecTemplate() {
+    const res = await apiClient.get("/moisture-spec/template", { responseType: "blob" });
+    const today = new Date().toISOString().slice(0, 10);
+    const url = URL.createObjectURL(new Blob([res.data]));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `MoistureSpec_Template_${today}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  async uploadMoistureSpecs(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await apiClient.post("/moisture-spec/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data as { saved: number; skipped: number; errors: string[] };
   },
 };
 

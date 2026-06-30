@@ -283,13 +283,69 @@
 
 .blt-modal-footer {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
   margin-top: 0.25rem;
+}
+.blt-cancel-btn {
+  font-size: 0.875rem;
 }
 .blt-add-btn {
   background-color: var(--primary);
   color: white;
-  padding: 0 2.5rem;
+  padding: 0 1.75rem;
   font-size: 0.875rem;
   font-weight: 600;
+}
+.blt-modal-optional {
+  font-weight: 400;
+  font-style: italic;
+  margin-left: 0.25rem;
+  font-size: 0.7rem;
+}
+
+/* ── Clear end-date button ─────────────────────────────────── */
+.blt-clear-end {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.blt-clear-end:hover { color: var(--destructive); }
+
+/* ── Status / Source badges ────────────────────────────────── */
+.blt-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.blt-badge--manual  { background: color-mix(in oklab, hsl(38 95% 55%) 18%, transparent); color: hsl(38 80% 45%); }
+.blt-badge--auto    { background: color-mix(in oklab, var(--muted-foreground) 14%, transparent); color: var(--muted-foreground); }
+.blt-badge--running { background: color-mix(in oklab, hsl(142 70% 45%) 18%, transparent); color: hsl(142 60% 38%); }
+.blt-badge--closed  { background: color-mix(in oklab, var(--muted-foreground) 12%, transparent); color: var(--muted-foreground); }
+
+/* ── Extra table column helpers ────────────────────────────── */
+.blt-td-machine  { font-weight: 500; }
+.blt-td-runtime  { color: var(--muted-foreground); font-size: 0.78rem; }
+
+/* ── Pagination info label ─────────────────────────────────── */
+.blt-pager-info {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0 0.25rem;
+}
+.blt-pager-page {
+  font-size: 0.75rem;
+  color: var(--foreground);
+  min-width: 3rem;
+  text-align: center;
 }

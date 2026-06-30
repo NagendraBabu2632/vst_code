@@ -141,6 +141,166 @@ export const Top5BarChart = ({ data, mode }: Top5BarChartProps) => {
 };
 
 /* ============================================================
+ * Moisture Sensors Bar Chart (vertical bars + LSL/USL/Target)
+ * ========================================================== */
+
+export interface MoistureSensorItem {
+  location: string;
+  line: string;
+  tagName: string;
+  avgMoisture: number | null;
+}
+
+interface MoistureBarChartProps {
+  data: MoistureSensorItem[];
+  lsl?: number;
+  target?: number;
+  usl?: number;
+}
+
+const MOIST_HEIGHT = 148;
+const MOIST_MARGIN = { top: 6, right: 46, bottom: 58, left: 28 };
+
+const getMoistureBarFill = (v: number | null, lsl: number, usl: number): string => {
+  if (v === null) return "hsl(220, 14%, 35%)";
+  if (v < lsl || v > usl) return "hsl(0, 85%, 60%)";
+  const nearBand = (usl - lsl) * 0.15;
+  if (v <= lsl + nearBand || v >= usl - nearBand) return "hsl(45, 95%, 55%)";
+  return "hsl(142, 70%, 45%)";
+};
+
+export const MoistureBarChart = ({
+  data,
+  lsl = 11.5,
+  target = 12.5,
+  usl = 13.5,
+}: MoistureBarChartProps) => {
+  const { ref, width } = useChartSize(700);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+
+  const innerW = Math.max(20, width - MOIST_MARGIN.left - MOIST_MARGIN.right);
+  const innerH = MOIST_HEIGHT - MOIST_MARGIN.top - MOIST_MARGIN.bottom;
+
+  const locations = useMemo(() => data.map((d) => d.location), [data]);
+
+  const maxVal = useMemo(() => {
+    const vals = data.filter((d) => d.avgMoisture !== null).map((d) => d.avgMoisture as number);
+    return Math.max(usl + 2, ...vals, 0.1);
+  }, [data, usl]);
+
+  const x = useMemo(
+    () => d3.scaleBand<string>().domain(locations).range([0, innerW]).padding(0.3),
+    [locations, innerW]
+  );
+
+  const y = useMemo(
+    () => d3.scaleLinear().domain([0, maxVal]).nice().range([innerH, 0]),
+    [maxVal, innerH]
+  );
+
+  const yTicks = y.ticks(3);
+
+  const showTip = useCallback((e: React.MouseEvent, d: MoistureSensorItem) => {
+    const tt = tooltipRef.current;
+    if (!tt) return;
+    tt.innerHTML =
+      `<div class="d3-tt-name">${d.location}</div>` +
+      `<div class="d3-tt-muted">Line: ${d.line}</div>` +
+      `<div class="d3-tt-muted">${d.tagName}</div>` +
+      `<div>Moisture: <strong>${d.avgMoisture !== null ? `${(d.avgMoisture as number).toFixed(2)}%` : "No Data"}</strong></div>`;
+    tt.classList.add("is-visible");
+    tt.style.left = `${e.clientX + 12}px`;
+    tt.style.top = `${e.clientY + 12}px`;
+  }, []);
+  const hideTip = useCallback(() => tooltipRef.current?.classList.remove("is-visible"), []);
+
+  const refLines = [
+    { val: lsl,    label: "LSL",    color: "hsl(0, 85%, 60%)",    dash: "5 3" },
+    { val: usl,    label: "USL",    color: "hsl(0, 85%, 60%)",    dash: "5 3" },
+    { val: target, label: "Target", color: "hsl(210, 100%, 60%)", dash: "4 4" },
+  ];
+
+  return (
+    <div ref={ref} className="d3-bar-wrap">
+      <svg width={width} height={MOIST_HEIGHT}>
+        <g transform={`translate(${MOIST_MARGIN.left},${MOIST_MARGIN.top})`}>
+          {/* Horizontal grid */}
+          {yTicks.map((t) => (
+            <line key={t} x1={0} x2={innerW} y1={y(t)} y2={y(t)}
+              stroke={gridStroke} strokeDasharray="3 3" />
+          ))}
+
+          {/* Reference lines */}
+          {refLines.map(({ val, label, color, dash }) => {
+            const ry = y(val);
+            if (ry < -1 || ry > innerH + 1) return null;
+            return (
+              <g key={label}>
+                <line x1={0} x2={innerW} y1={ry} y2={ry}
+                  stroke={color} strokeWidth={1.5} strokeDasharray={dash} />
+                <text x={innerW + 4} y={ry} dy={3} fontSize={8} fill={color} fontWeight={600}>
+                  {label}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Bars — values shown only in tooltip */}
+          {data.map((d) => {
+            const bx   = x(d.location) ?? 0;
+            const bw   = x.bandwidth();
+            const val  = d.avgMoisture ?? 0;
+            const by   = y(val);
+            const bh   = Math.max(0, innerH - by);
+            const fill = getMoistureBarFill(d.avgMoisture, lsl, usl);
+            return (
+              <rect
+                key={d.location}
+                x={bx} y={by} width={bw} height={bh}
+                fill={fill} fillOpacity={d.avgMoisture === null ? 0.25 : 0.88} rx={3}
+                onMouseEnter={(e) => showTip(e, d)}
+                onMouseMove={(e) => showTip(e, d)}
+                onMouseLeave={hideTip}
+              />
+            );
+          })}
+
+          {/* Y axis */}
+          <line y1={0} y2={innerH} stroke={axisStroke} />
+          {yTicks.map((t) => (
+            <g key={t} transform={`translate(0,${y(t)})`}>
+              <line x1={-3} stroke={axisStroke} />
+              <text x={-5} dy={3} textAnchor="end" fontSize={9} fill={axisStroke}>{t}</text>
+            </g>
+          ))}
+
+          {/* X axis — rotated labels */}
+          <g transform={`translate(0,${innerH})`}>
+            <line x1={0} x2={innerW} stroke={axisStroke} />
+            {data.map((d) => {
+              const cx = (x(d.location) ?? 0) + x.bandwidth() / 2;
+              return (
+                <g key={d.location} transform={`translate(${cx},0)`}>
+                  <line y2={3} stroke={axisStroke} />
+                  <text
+                    y={10} textAnchor="end"
+                    transform="rotate(-40)"
+                    fontSize={9} fill={axisStroke}
+                  >
+                    {d.location}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        </g>
+      </svg>
+      <div ref={tooltipRef} className="d3-tooltip" />
+    </div>
+  );
+};
+
+/* ============================================================
  * Asset-wise Energy (horizontal bar)
  * ========================================================== */
 

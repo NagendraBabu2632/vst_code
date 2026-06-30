@@ -1,7 +1,7 @@
 import './BlendTrackerPage.css';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, Pencil, X, ChevronLeft, ChevronRight, RefreshCw, CalendarIcon, Clock } from 'lucide-react';
+import { Pencil, X, ChevronLeft, ChevronRight, RefreshCw, CalendarIcon, Clock, Plus } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import Dropdown from '@/components/Dropdown';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { toast } from 'sonner';
-import { apiService, BlendRunLog } from '@/services/api';
+import { apiService, type BlendRunLog, type BlendRunPayload } from '@/services/api';
 import { useAppSelector } from '@/redux/hooks/reduxHooks';
 import { selectDropdownData } from '@/redux/slices/dropdownSlice';
 import { format } from 'date-fns';
@@ -19,19 +19,31 @@ interface BlendOption {
   blendName: string;
 }
 
+type ModalMode = 'add' | 'edit' | null;
+
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 const fmtTime = (t: string | null) => {
-  if (!t) return '';
-  try { return format(new Date(t), 'MMM d, yyyy, HH:mm'); } catch { return t; }
+  if (!t) return '—';
+  try { return format(new Date(t.replace(' ', 'T')), 'MMM d, yyyy, HH:mm'); } catch { return t; }
 };
 
-const toISOWithTime = (date: Date | undefined, time: string): string => {
-  if (!date) return '';
+// Convert Date + HH:MM string → Unix epoch ms (null if date missing)
+const toEpochMs = (date: Date | undefined, time: string): number | null => {
+  if (!date) return null;
   const [h = '00', m = '00'] = time.split(':');
   const d = new Date(date);
-  d.setHours(parseInt(h), parseInt(m), 0, 0);
-  return d.toISOString();
+  d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+  return d.getTime();
+};
+
+// Parse "YYYY-MM-DD HH:MM" or ISO string into { date, time } for form pre-fill
+const parseApiDateTime = (dt: string | null): { date: Date | undefined; time: string } => {
+  if (!dt) return { date: undefined, time: '' };
+  try {
+    const d = new Date(dt.replace(' ', 'T'));
+    return { date: d, time: format(d, 'HH:mm') };
+  } catch { return { date: undefined, time: '' }; }
 };
 
 const BlendTrackerPage = () => {
@@ -43,10 +55,14 @@ const BlendTrackerPage = () => {
   const [filterText, setFilterText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [showModal, setShowModal] = useState(false);
 
-  // Modal form state
-  const [overrideStatus, setOverrideStatus] = useState(false);
+  // Modal
+  const [modalMode, setModalMode] = useState<ModalMode>(null);
+  const [editingLog, setEditingLog] = useState<BlendRunLog | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Form fields (shared by add + edit)
+  const [overrideStatus, setOverrideStatus] = useState(true);
   const [selectedMachine, setSelectedMachine] = useState('');
   const [selectedBlend, setSelectedBlend] = useState('');
   const [startDate, setStartDate] = useState<Date | undefined>();
@@ -55,11 +71,11 @@ const BlendTrackerPage = () => {
   const [endTime, setEndTime] = useState('');
   const [startOpen, setStartOpen] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
-  const [adding, setAdding] = useState(false);
 
-  const machineIdMap = useMemo(() => {
-    return (dropdownData?.common?.machineIdMap ?? {}) as Record<string, number>;
-  }, [dropdownData]);
+  const machineIdMap = useMemo(
+    () => (dropdownData?.common?.machineIdMap ?? {}) as Record<string, number>,
+    [dropdownData]
+  );
 
   const machineOpts = useMemo(() => {
     const all = (dropdownData?.common?.machines ?? []) as { value: string; label: string }[];
@@ -73,9 +89,7 @@ const BlendTrackerPage = () => {
       setLogs(data);
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status !== 404 && status !== 405) {
-        toast.error('Failed to load blend run logs');
-      }
+      if (status !== 404 && status !== 405) toast.error('Failed to load blend run logs');
       setLogs([]);
     } finally {
       setLoading(false);
@@ -89,20 +103,25 @@ const BlendTrackerPage = () => {
       .catch(() => toast.error('Failed to load blends'));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Filter + pagination ──────────────────────────────────────────────────────
+
   const filteredLogs = useMemo(() => {
     if (!filterText) return logs;
     const q = filterText.toLowerCase();
     return logs.filter(l =>
       l.blendName.toLowerCase().includes(q) ||
-      l.machine.toLowerCase().includes(q)
+      l.machineName.toLowerCase().includes(q) ||
+      l.source.toLowerCase().includes(q)
     );
   }, [logs, filterText]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
-  const pagedLogs = filteredLogs.slice((page - 1) * pageSize, page * pageSize);
+  const pagedLogs  = filteredLogs.slice((page - 1) * pageSize, page * pageSize);
 
-  const resetModal = () => {
-    setOverrideStatus(false);
+  // ── Modal helpers ────────────────────────────────────────────────────────────
+
+  const resetForm = () => {
+    setOverrideStatus(true);
     setSelectedMachine('');
     setSelectedBlend('');
     setStartDate(undefined);
@@ -111,41 +130,102 @@ const BlendTrackerPage = () => {
     setEndTime('');
   };
 
-  const handleAdd = async () => {
-    if (!selectedMachine || !selectedBlend || !startDate) {
-      toast.error('Please fill all required fields');
-      return;
-    }
-    const blend = blends.find(b => String(b.blendId) === selectedBlend);
-    if (!blend) return;
+  const closeModal = () => {
+    setModalMode(null);
+    setEditingLog(null);
+    resetForm();
+  };
 
+  const openAdd = () => {
+    resetForm();
+    setModalMode('add');
+  };
+
+  const openEdit = (log: BlendRunLog) => {
+    setEditingLog(log);
+    setOverrideStatus(log.source === 'Manual');
+    setSelectedMachine(log.machineName);
+    setSelectedBlend(log.blendId !== null ? String(log.blendId) : '');
+    const s = parseApiDateTime(log.startTime);
+    setStartDate(s.date);
+    setStartTime(s.time);
+    const e = parseApiDateTime(log.endTime);
+    setEndDate(e.date);
+    setEndTime(e.time);
+    setModalMode('edit');
+  };
+
+  // ── Build payload ────────────────────────────────────────────────────────────
+
+  const buildPayload = (): BlendRunPayload | null => {
+    if (!selectedMachine || !startDate) {
+      toast.error('Machine and Start Date are required');
+      return null;
+    }
     const machineId = machineIdMap[selectedMachine];
     if (!machineId) {
-      toast.error('Could not resolve machine ID. Please try again.');
-      return;
+      toast.error('Could not resolve machine ID');
+      return null;
     }
+    const startMs = toEpochMs(startDate, startTime);
+    if (!startMs) {
+      toast.error('Invalid start date/time');
+      return null;
+    }
+    const endMs = endDate ? toEpochMs(endDate, endTime) : null;
 
-    setAdding(true);
+    const blend = selectedBlend ? blends.find(b => String(b.blendId) === selectedBlend) : null;
+
+    return {
+      machineId,
+      blendId:       blend?.blendId ?? null,
+      blendName:     blend?.blendName ?? 'Unknown',
+      startTimeMs:   startMs,
+      endTimeMs:     endMs,
+      overrideStatus,
+    };
+  };
+
+  // ── Add ──────────────────────────────────────────────────────────────────────
+
+  const handleAdd = async () => {
+    const payload = buildPayload();
+    if (!payload) return;
+    setSaving(true);
     try {
-      await apiService.addBlendRunLog({
-        machineId,
-        blendId: blend.blendId,
-        blendName: blend.blendName,
-        startDate: toISOWithTime(startDate, startTime),
-        endDate: endDate ? toISOWithTime(endDate, endTime) : undefined,
-        overrideStatus,
-      });
+      await apiService.addBlendRunLog(payload);
       toast.success('Blend run added successfully');
-      setShowModal(false);
-      resetModal();
+      closeModal();
       await loadLogs();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to add blend run';
+      const msg = err?.response?.data?.error ?? err?.response?.data?.message ?? err?.message ?? 'Failed to add blend run';
       toast.error(msg);
     } finally {
-      setAdding(false);
+      setSaving(false);
     }
   };
+
+  // ── Edit ─────────────────────────────────────────────────────────────────────
+
+  const handleUpdate = async () => {
+    if (!editingLog) return;
+    const payload = buildPayload();
+    if (!payload) return;
+    setSaving(true);
+    try {
+      await apiService.updateBlendRunLog(editingLog.id, payload);
+      toast.success('Blend run updated successfully');
+      closeModal();
+      await loadLogs();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? err?.response?.data?.message ?? err?.message ?? 'Failed to update blend run';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <DashboardLayout>
@@ -155,7 +235,7 @@ const BlendTrackerPage = () => {
         {/* Top bar */}
         <div className="blt-topbar">
           <Input
-            placeholder="Filter list"
+            placeholder="Filter by machine, blend or source…"
             value={filterText}
             onChange={e => { setFilterText(e.target.value); setPage(1); }}
             className="blt-filter-input"
@@ -165,8 +245,9 @@ const BlendTrackerPage = () => {
               <RefreshCw className={loading ? 'blt-spin' : ''} style={{ width: '0.875rem', height: '0.875rem' }} />
               {loading ? 'Refreshing…' : 'Refresh'}
             </Button>
-            <Button className="blt-configure-btn" onClick={() => setShowModal(true)}>
-              Configure
+            <Button className="blt-configure-btn" onClick={openAdd}>
+              <Plus style={{ width: '0.875rem', height: '0.875rem' }} />
+              Add Run
             </Button>
           </div>
         </div>
@@ -178,35 +259,53 @@ const BlendTrackerPage = () => {
               <thead>
                 <tr>
                   <th>Sl. No.</th>
-                  <th>Blend Name</th>
-                  <th>Start Time</th>
-                  <th>End Time</th>
                   <th>Machine</th>
+                  <th>Blend Name</th>
+                  <th className="blt-td-time">Start Time</th>
+                  <th className="blt-td-time">End Time</th>
+                  <th>Source</th>
+                  <th>Run Time</th>
+                  <th>Status</th>
                   <th className="blt-th-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {pagedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="blt-empty">
+                    <td colSpan={9} className="blt-empty">
                       {loading ? 'Loading…' : 'No blend run logs found'}
                     </td>
                   </tr>
                 ) : (
-                  pagedLogs.map((log, i) => (
+                  pagedLogs.map(log => (
                     <tr key={log.id}>
-                      <td>{(page - 1) * pageSize + i + 1}</td>
+                      <td>{log.slNo}</td>
+                      <td className="blt-td-machine">{log.machineName}</td>
                       <td className="blt-td-blend">{log.blendName}</td>
                       <td className="blt-td-time">{fmtTime(log.startTime)}</td>
                       <td className="blt-td-time">{fmtTime(log.endTime)}</td>
-                      <td>{log.machine}</td>
+                      <td>
+                        <span className={`blt-badge blt-badge--${log.source.toLowerCase()}`}>
+                          {log.source}
+                        </span>
+                      </td>
+                      <td className="blt-td-runtime">{log.runTime}</td>
+                      <td>
+                        <span className={`blt-badge blt-badge--${log.isRunning ? 'running' : 'closed'}`}>
+                          {log.isRunning ? 'Running' : 'Closed'}
+                        </span>
+                      </td>
                       <td className="blt-td-actions">
-                        <button type="button" className="blt-action-btn blt-action-view" title="View">
-                          <Eye style={{ width: '1rem', height: '1rem' }} />
-                        </button>
-                        <button type="button" className="blt-action-btn blt-action-edit" title="Edit">
-                          <Pencil style={{ width: '1rem', height: '1rem' }} />
-                        </button>
+                        {log.canEdit && (
+                          <button
+                            type="button"
+                            className="blt-action-btn blt-action-edit"
+                            title="Edit"
+                            onClick={() => openEdit(log)}
+                          >
+                            <Pencil style={{ width: '1rem', height: '1rem' }} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -225,15 +324,15 @@ const BlendTrackerPage = () => {
                 title="Rows per page"
                 aria-label="Rows per page"
               >
-                {PAGE_SIZE_OPTIONS.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
+                {PAGE_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+            <span className="blt-pager-info">{filteredLogs.length} rows</span>
             <div className="blt-pager-nav">
               <Button variant="ghost" size="icon" className="blt-pager-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
                 <ChevronLeft style={{ width: '1rem', height: '1rem' }} />
               </Button>
+              <span className="blt-pager-page">{page} / {totalPages}</span>
               <Button variant="ghost" size="icon" className="blt-pager-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
                 <ChevronRight style={{ width: '1rem', height: '1rem' }} />
               </Button>
@@ -241,10 +340,10 @@ const BlendTrackerPage = () => {
           </div>
         </motion.div>
 
-        {/* Configure Modal */}
+        {/* Add / Edit Modal */}
         <AnimatePresence>
-          {showModal && (
-            <div className="blt-overlay" onClick={() => { setShowModal(false); resetModal(); }}>
+          {modalMode !== null && (
+            <div className="blt-overlay" onClick={closeModal}>
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -253,11 +352,13 @@ const BlendTrackerPage = () => {
                 className="blt-modal"
                 onClick={e => e.stopPropagation()}
               >
-                <button type="button" className="blt-modal-close" title="Close" aria-label="Close" onClick={() => { setShowModal(false); resetModal(); }}>
+                <button type="button" className="blt-modal-close" title="Close" aria-label="Close" onClick={closeModal}>
                   <X style={{ width: '1rem', height: '1rem' }} />
                 </button>
 
-                <h2 className="blt-modal-title">Blend Timestamp Configuration</h2>
+                <h2 className="blt-modal-title">
+                  {modalMode === 'edit' ? 'Edit Blend Run' : 'Add Blend Run'}
+                </h2>
 
                 {/* Override Status */}
                 <label className="blt-modal-check">
@@ -267,32 +368,34 @@ const BlendTrackerPage = () => {
                     onChange={e => setOverrideStatus(e.target.checked)}
                     className="blt-checkbox"
                   />
-                  Override Status
+                  Override Status (Manual)
                 </label>
 
-                {/* Select Machine */}
+                {/* Machine */}
                 <div className="blt-modal-field">
+                  <label className="blt-field-label">Machine <span className="blt-required">*</span></label>
                   <Dropdown
                     value={selectedMachine || undefined}
                     onValueChange={setSelectedMachine}
-                    placeholder="Select Machine *"
+                    placeholder="Select Machine"
                     options={machineOpts}
                   />
                 </div>
 
-                {/* Select Blend Name */}
+                {/* Blend Name */}
                 <div className="blt-modal-field">
+                  <label className="blt-field-label">Blend Name</label>
                   <Dropdown
                     value={selectedBlend || undefined}
                     onValueChange={setSelectedBlend}
-                    placeholder="Select Blend Name *"
+                    placeholder="Select Blend"
                     options={blends.map(b => ({ value: String(b.blendId), label: b.blendName }))}
                   />
                 </div>
 
                 {/* Start Date + Time */}
                 <div className="blt-modal-field">
-                  <label className="blt-field-label">Start Date <span className="blt-required">*</span></label>
+                  <label className="blt-field-label">Start Date / Time <span className="blt-required">*</span></label>
                   <div className="blt-datetime-row">
                     <Popover open={startOpen} onOpenChange={setStartOpen}>
                       <PopoverTrigger asChild>
@@ -325,7 +428,7 @@ const BlendTrackerPage = () => {
 
                 {/* End Date + Time */}
                 <div className="blt-modal-field">
-                  <label className="blt-field-label">End Date</label>
+                  <label className="blt-field-label">End Date / Time <span className="blt-modal-optional">(leave empty = still running)</span></label>
                   <div className="blt-datetime-row">
                     <Popover open={endOpen} onOpenChange={setEndOpen}>
                       <PopoverTrigger asChild>
@@ -353,12 +456,29 @@ const BlendTrackerPage = () => {
                         aria-label="End time"
                       />
                     </div>
+                    {endDate && (
+                      <button
+                        type="button"
+                        className="blt-clear-end"
+                        title="Clear end date"
+                        onClick={() => { setEndDate(undefined); setEndTime(''); }}
+                      >
+                        <X style={{ width: '0.875rem', height: '0.875rem' }} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 <div className="blt-modal-footer">
-                  <Button onClick={handleAdd} disabled={adding} className="blt-add-btn">
-                    {adding ? 'Adding…' : 'ADD'}
+                  <Button variant="outline" onClick={closeModal} disabled={saving} className="blt-cancel-btn">
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={modalMode === 'edit' ? handleUpdate : handleAdd}
+                    disabled={saving}
+                    className="blt-add-btn"
+                  >
+                    {saving ? (modalMode === 'edit' ? 'Saving…' : 'Adding…') : (modalMode === 'edit' ? 'Save Changes' : 'Add Run')}
                   </Button>
                 </div>
               </motion.div>

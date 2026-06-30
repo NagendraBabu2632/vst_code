@@ -5,7 +5,7 @@ import { selectDropdownData } from "@/redux/slices/dropdownSlice";
 import { useLocation, useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import { motion } from "framer-motion";
-import { Bell, Gauge, Package, Upload, Plus, Trash2, Pencil, IndianRupee, FlaskConical, History, Download, Zap, CalendarIcon, AlertTriangle, Mail, X } from "lucide-react";
+import { Bell, Gauge, Package, Upload, Plus, Trash2, Pencil, IndianRupee, FlaskConical, History, Download, Zap, CalendarIcon, AlertTriangle, Mail, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -20,17 +20,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { apiService } from "@/services/api";
-import type { AlertRuleApi, TariffMaster, TariffBand } from "@/services/api";
-
-const parameters = ["Moisture S1", "Moisture S2", "Moisture S3", "Moisture S4"];
+import type { AlertRuleApi, TariffMaster, TariffBand, MoistureSpecDto } from "@/services/api";
 
 interface BlendFamily { familyId: number; familyName: string; }
 interface Blend { blendId: number; blendName: string; blendDescription: string; familyId: number; familyName: string; }
 const quarters = ["Q1 (Jan–Mar)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Oct–Dec)"];
 const currentYear = new Date().getFullYear();
 const years = [currentYear - 1, currentYear, currentYear + 1];
-
-interface MoistureSpec { family: string; year: number; quarter: string; lsl: number; usl: number; target: number; updatedAt: string; }
+const quarterToNum = (q: string): number => quarters.indexOf(q) + 1;
 
 const SettingsPage = () => {
   const [blends, setBlends] = useState<Blend[]>([]);
@@ -63,14 +60,19 @@ const SettingsPage = () => {
   const [processSaving, setProcessSaving] = useState(false);
 
 
-  const [specs, setSpecs] = useState<MoistureSpec[]>([
-    { family: "Family A", year: currentYear, quarter: "Q1 (Jan–Mar)", lsl: 11.0, usl: 14.0, target: 12.5, updatedAt: new Date().toISOString().slice(0, 10) },
-    { family: "Family A", year: currentYear, quarter: "Q2 (Apr–Jun)", lsl: 11.2, usl: 13.8, target: 12.5, updatedAt: new Date().toISOString().slice(0, 10) },
-    { family: "Family B", year: currentYear, quarter: "Q1 (Jan–Mar)", lsl: 10.5, usl: 13.5, target: 12.0, updatedAt: new Date().toISOString().slice(0, 10) },
-  ]);
+  const [moistureSpecs, setMoistureSpecs] = useState<MoistureSpecDto[]>([]);
+  const [moistureLoading, setMoistureLoading] = useState(false);
+  const [moistureSaving, setMoistureSaving] = useState(false);
+  const [moistureUploadResult, setMoistureUploadResult] = useState<{ saved: number; skipped: number; errors: string[] } | null>(null);
+  const moistureFileInputRef = useRef<HTMLInputElement>(null);
+  const SPEC_PAGE_SIZE = 10;
+  const [specPage, setSpecPage] = useState(0);
+
   const dropdownData = useAppSelector(selectDropdownData);
-  const machineOpts = (dropdownData?.common?.machines ?? []) as { value: string; label: string }[];
-  const blendOpts   = (dropdownData?.common?.families ?? []) as { value: string; label: string }[];
+  const machineOpts    = (dropdownData?.common?.machines ?? []) as { value: string; label: string }[];
+  const blendOpts      = (dropdownData?.common?.families ?? []) as { value: string; label: string }[];
+  const machineIdMap   = (dropdownData?.common?.machineIdMap ?? {}) as Record<string, number>;
+
   const [specMachine, setSpecMachine] = useState("");
   const [specBlend, setSpecBlend] = useState("");
   const [specYear, setSpecYear] = useState<number>(currentYear);
@@ -79,22 +81,104 @@ const SettingsPage = () => {
   const [specUsl, setSpecUsl] = useState("14.0");
   const [specTarget, setSpecTarget] = useState("12.5");
 
-  const currentSpec = specs.find((s) => s.family === specBlend && s.year === specYear && s.quarter === specQuarter);
+  const currentMoistureSpec = moistureSpecs.find(
+    (s) => s.machineId === machineIdMap[specMachine] &&
+           s.blendId === (blends.find((b) => b.blendName === specBlend)?.blendId ?? -1) &&
+           s.year === specYear &&
+           s.quarter === quarterToNum(specQuarter)
+  );
 
-  const saveSpec = () => {
-    const lsl = parseFloat(specLsl); const usl = parseFloat(specUsl); const target = parseFloat(specTarget);
-    if (isNaN(lsl) || isNaN(usl) || isNaN(target)) { toast.error("Enter valid numeric values"); return; }
-    if (lsl >= usl) { toast.error("LSL must be less than USL"); return; }
-    const updatedAt = new Date().toISOString().slice(0, 10);
-    setSpecs((prev) => {
-      const filtered = prev.filter((s) => !(s.family === specBlend && s.year === specYear && s.quarter === specQuarter));
-      return [...filtered, { family: specBlend, year: specYear, quarter: specQuarter, lsl, usl, target, updatedAt }];
-    });
-    toast.success(`Spec saved for ${specBlend} · ${specQuarter} ${specYear}`);
+  const loadMoistureSpecs = async () => {
+    setMoistureLoading(true);
+    try {
+      const data = await apiService.fetchActiveMoistureSpecs();
+      setMoistureSpecs(data);
+      setSpecPage(0);
+    } catch {
+      toast.error("Failed to load moisture specs");
+    } finally {
+      setMoistureLoading(false);
+    }
   };
 
   const loadSpec = () => {
-    if (currentSpec) { setSpecLsl(String(currentSpec.lsl)); setSpecUsl(String(currentSpec.usl)); setSpecTarget(String(currentSpec.target)); }
+    if (currentMoistureSpec) {
+      setSpecLsl(String(currentMoistureSpec.lsl));
+      setSpecUsl(String(currentMoistureSpec.usl));
+      setSpecTarget(String(currentMoistureSpec.target));
+    }
+  };
+
+  const saveSpec = async () => {
+    const lsl = parseFloat(specLsl); const usl = parseFloat(specUsl); const target = parseFloat(specTarget);
+    if (isNaN(lsl) || isNaN(usl) || isNaN(target)) { toast.error("Enter valid numeric values"); return; }
+    if (lsl >= usl) { toast.error("LSL must be less than USL"); return; }
+    const machineId = machineIdMap[specMachine];
+    if (!machineId) { toast.error("Select a valid machine"); return; }
+    const blendObj = blends.find((b) => b.blendName === specBlend);
+    if (!blendObj) { toast.error("Select a valid blend"); return; }
+    setMoistureSaving(true);
+    try {
+      await apiService.upsertMoistureSpec({ machineId, blendId: blendObj.blendId, year: specYear, quarter: quarterToNum(specQuarter), lsl, usl, target, isActive: true });
+      toast.success(`Spec saved for ${specMachine} · ${specBlend} · ${specQuarter} ${specYear}`);
+      await loadMoistureSpecs();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error ?? "Failed to save spec");
+    } finally {
+      setMoistureSaving(false);
+    }
+  };
+
+  const handleToggleMoistureSpec = async (spec: MoistureSpecDto) => {
+    try {
+      await apiService.toggleMoistureSpec(spec.id, !spec.isActive);
+      toast.success(spec.isActive ? "Spec deactivated" : "Spec activated");
+      await loadMoistureSpecs();
+    } catch {
+      toast.error("Failed to update spec status");
+    }
+  };
+
+  const handleDeleteMoistureSpec = async (id: number) => {
+    try {
+      await apiService.deleteMoistureSpec(id);
+      toast.info("Spec deleted");
+      setMoistureSpecs((prev) => {
+        const next = prev.filter((s) => s.id !== id);
+        const maxPage = Math.max(0, Math.ceil(next.length / SPEC_PAGE_SIZE) - 1);
+        setSpecPage((p) => Math.min(p, maxPage));
+        return next;
+      });
+    } catch {
+      toast.error("Failed to delete spec");
+    }
+  };
+
+  const handleMoistureDownloadTemplate = async () => {
+    try {
+      await apiService.downloadMoistureSpecTemplate();
+      toast.success("Template downloaded");
+    } catch {
+      toast.error("Failed to download template");
+    }
+  };
+
+  const handleMoistureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext !== "xlsx") { toast.error("Only .xlsx files are supported"); return; }
+    try {
+      const result = await apiService.uploadMoistureSpecs(file);
+      setMoistureUploadResult(result);
+      if (result.errors?.length) result.errors.forEach((err) => toast.warning(err));
+      else toast.success(`Saved ${result.saved} spec(s)`);
+      await loadMoistureSpecs();
+    } catch {
+      toast.error("Failed to upload specs");
+    } finally {
+      if (moistureFileInputRef.current) moistureFileInputRef.current.value = "";
+    }
   };
 
   const loadBlends = async () => {
@@ -288,6 +372,7 @@ const SettingsPage = () => {
   useEffect(() => {
     if (activeTab === "sku") loadBlends();
     if (activeTab === "process") loadProcessTargets();
+    if (activeTab === "moisture-specs") { loadBlends(); loadMoistureSpecs(); }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -388,10 +473,23 @@ const SettingsPage = () => {
 
           {activeTab === "moisture-specs" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-container settings-section">
-              <div className="settings-section-head"><FlaskConical /><h3 className="settings-section-title">Moisture Parameter Specifications</h3></div>
+              <div className="settings-section-head settings-section-head--between">
+                <div className="settings-head-row"><FlaskConical /><h3 className="settings-section-title">Moisture Parameter Specifications</h3></div>
+                <div className="settings-head-row">
+                  <Button size="sm" variant="outline" onClick={handleMoistureDownloadTemplate}><Download />Template</Button>
+                  <Button size="sm" variant="outline" onClick={() => moistureFileInputRef.current?.click()}><Upload />Upload</Button>
+                  <input ref={moistureFileInputRef} type="file" accept=".xlsx" onChange={handleMoistureUpload} className="settings-file-hidden" aria-label="Upload moisture specs Excel file" />
+                </div>
+              </div>
               <p className="settings-section-desc">
-                Configured by <strong>Family</strong> with a <strong>quarterly view</strong>. Historical changes are tracked automatically.
+                Configured by <strong>Machine</strong> and <strong>Blend</strong> with a quarterly view. Unique key: Machine + Blend + Year + Quarter.
               </p>
+              {moistureUploadResult && (
+                <div className="settings-prod-upload-result">
+                  <span>{moistureUploadResult.saved} saved, {moistureUploadResult.skipped} skipped</span>
+                  {moistureUploadResult.errors?.map((err, i) => <span key={i} className="settings-prod-upload-error">{err}</span>)}
+                </div>
+              )}
               <Separator />
 
               <div className="settings-grid-4">
@@ -399,7 +497,7 @@ const SettingsPage = () => {
                   <Label>Machine</Label>
                   <Dropdown
                     value={specMachine || machineOpts[0]?.value || ""}
-                    onValueChange={setSpecMachine}
+                    onValueChange={(v) => { setSpecMachine(v); setTimeout(loadSpec, 0); }}
                     options={machineOpts}
                   />
                 </div>
@@ -408,7 +506,7 @@ const SettingsPage = () => {
                   <Dropdown
                     value={specBlend || blendOpts[0]?.value || ""}
                     onValueChange={(v) => { setSpecBlend(v); setTimeout(loadSpec, 0); }}
-                    options={blendOpts}
+                    options={blends.length > 0 ? blends.map((b) => ({ value: b.blendName, label: b.blendName })) : blendOpts}
                   />
                 </div>
                 <div className="settings-field">
@@ -437,44 +535,96 @@ const SettingsPage = () => {
 
               <div className="settings-spec-footer">
                 <div className="info">
-                  {currentSpec ? (<>Last updated: <strong>{currentSpec.updatedAt}</strong></>) : (<span className="italic">No spec configured for this Family + Quarter — saving will create one.</span>)}
+                  {currentMoistureSpec
+                    ? (<>Last updated: <strong>{currentMoistureSpec.updatedAt?.slice(0, 10) ?? currentMoistureSpec.createdAt.slice(0, 10)}</strong></>)
+                    : (<span className="italic">No spec for this Machine + Blend + Quarter — saving will create one.</span>)}
                 </div>
-                <Button onClick={saveSpec}>Save Spec</Button>
+                <Button onClick={saveSpec} disabled={moistureSaving}>{moistureSaving ? "Saving…" : "Save Spec"}</Button>
               </div>
 
               <Separator />
 
               <div className="settings-section settings-section--gap-sm">
-                <h4 className="settings-history-head"><History /> Historical Spec Changes</h4>
+                <h4 className="settings-history-head"><History /> Active Specs</h4>
                 <div className="settings-table-wrap">
                   <table className="settings-table">
                     <thead>
                       <tr>
-                        <th className="text-left">Family</th>
+                        <th className="text-left">Machine</th>
+                        <th className="text-left">Blend</th>
                         <th className="text-left">Year</th>
                         <th className="text-left">Quarter</th>
                         <th className="text-right">LSL</th>
                         <th className="text-right">Target</th>
                         <th className="text-right">USL</th>
                         <th className="text-left">Updated</th>
+                        <th className="text-left">Status</th>
+                        <th className="text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[...specs].sort((a, b) => (a.family + a.year + a.quarter).localeCompare(b.family + b.year + b.quarter)).map((s, i) => (
-                        <tr key={i}>
-                          <td className="medium">{s.family}</td>
+                      {moistureLoading ? (
+                        <tr><td colSpan={10} className="settings-table-empty">Loading…</td></tr>
+                      ) : moistureSpecs.length === 0 ? (
+                        <tr><td colSpan={10} className="settings-table-empty">No specs configured</td></tr>
+                      ) : moistureSpecs.slice(specPage * SPEC_PAGE_SIZE, (specPage + 1) * SPEC_PAGE_SIZE).map((s) => (
+                        <tr key={s.id}>
+                          <td className="medium">{s.machineName}</td>
+                          <td className="medium">{s.blendName}</td>
                           <td className="mono-strong">{s.year}</td>
-                          <td>{s.quarter}</td>
+                          <td>{s.quarterLabel}</td>
                           <td className="right mono-strong">{s.lsl.toFixed(2)}</td>
                           <td className="right primary-strong">{s.target.toFixed(2)}</td>
                           <td className="right mono-strong">{s.usl.toFixed(2)}</td>
-                          <td className="muted">{s.updatedAt}</td>
+                          <td className="muted">{(s.updatedAt ?? s.createdAt).slice(0, 10)}</td>
+                          <td>
+                            <Badge variant="outline" className={`${s.isActive ? "settings-badge-offpeak" : ""} settings-badge-sm`}>
+                              {s.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </td>
+                          <td>
+                            <div className="settings-actions-cell">
+                              <Switch checked={s.isActive} onCheckedChange={() => handleToggleMoistureSpec(s)} title={s.isActive ? "Deactivate" : "Activate"} />
+                              <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => handleDeleteMoistureSpec(s.id)}><Trash2 /></Button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
-                      {specs.length === 0 && (<tr><td colSpan={7} className="settings-table-empty">No specs configured</td></tr>)}
                     </tbody>
                   </table>
                 </div>
+
+                {moistureSpecs.length > SPEC_PAGE_SIZE && (() => {
+                  const totalPages = Math.ceil(moistureSpecs.length / SPEC_PAGE_SIZE);
+                  const start = specPage * SPEC_PAGE_SIZE + 1;
+                  const end = Math.min((specPage + 1) * SPEC_PAGE_SIZE, moistureSpecs.length);
+                  return (
+                    <div className="spec-pagination">
+                      <button
+                        type="button"
+                        className="spec-pagination-btn"
+                        onClick={() => setSpecPage((p) => p - 1)}
+                        disabled={specPage === 0}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft />
+                      </button>
+                      <span className="spec-pagination-info">
+                        Page <strong>{specPage + 1}</strong> of <strong>{totalPages}</strong>
+                        <span className="spec-pagination-range">&nbsp;(rows {start}–{end} of {moistureSpecs.length})</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="spec-pagination-btn"
+                        onClick={() => setSpecPage((p) => p + 1)}
+                        disabled={specPage === totalPages - 1}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight />
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </motion.div>
           )}

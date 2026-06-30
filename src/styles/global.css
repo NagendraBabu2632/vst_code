@@ -237,6 +237,18 @@ p { line-height: 1.6; }
   align-items: center;
 }
 
+.status-nospec {
+  background-color: hsl(0 0% 50% / 0.12);
+  color: hsl(0 0% 50%);
+  border: 1px solid hsl(0 0% 50% / 0.25);
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+}
+
 /* Mono text */
 .mono {
   font-family: var(--font-mono);

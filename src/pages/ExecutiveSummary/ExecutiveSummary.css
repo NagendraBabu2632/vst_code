@@ -154,6 +154,7 @@
 .exec-moisture-fill--ok       { background-color: hsl(142, 70%, 45%); }
 .exec-moisture-fill--warning  { background-color: hsl(45, 95%, 55%); }
 .exec-moisture-fill--critical { background-color: hsl(0, 85%, 60%); }
+.exec-moisture-fill--nodata   { background-color: var(--muted-foreground); opacity: 0.3; }
 
 .exec-moisture-value {
   font-size: 11px;
@@ -166,6 +167,7 @@
 .exec-moisture-value--ok       { color: hsl(142, 70%, 45%); }
 .exec-moisture-value--warning  { color: hsl(45, 95%, 55%); }
 .exec-moisture-value--critical { color: hsl(0, 85%, 60%); }
+.exec-moisture-value--nodata   { color: var(--muted-foreground); }
 
 .exec-chart-title--no-margin {
   margin: 0;

@@ -1,5 +1,5 @@
 import './ExecutiveSummary.css';
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import KpiCard from "@/components/KpiCard/KpiCard";
@@ -15,8 +15,9 @@ import {
   selectSecData,
   selectTrendData,
   selectTop5Data,
+  selectAlertSummary,
+  selectHumidityMoisture,
 } from "@/redux/slices/executiveSummarySlice";
-import { fetchAlertsData, selectAlerts } from "@/redux/slices/alertsSlice";
 import type { ExecApiPayload } from "@/redux/slices/dropdownSlice";
 import { apiService } from "@/services/api";
 import {
@@ -25,24 +26,9 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { EnergyTrendAreaChart } from "../../components/charts/AreaChart/AreaChart";
-import { Top5BarChart } from "../../components/charts/BarChart/BarChart";
+import { Top5BarChart, MoistureBarChart } from "../../components/charts/BarChart/BarChart";
 
 const MOISTURE_SPEC = { lsl: 11.5, target: 12.5, usl: 13.5 };
-
-const MoistureFillBar = ({ pct, status }: { pct: number; status: string }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.style.setProperty('--moisture-pct', `${pct}%`);
-  }, [pct]);
-  return <div ref={ref} className={`exec-moisture-fill exec-moisture-fill--${status}`} />;
-};
-
-const getMoistureStatus = (v: number) => {
-  if (v < MOISTURE_SPEC.lsl || v > MOISTURE_SPEC.usl) return "critical";
-  const nearBand = (MOISTURE_SPEC.usl - MOISTURE_SPEC.lsl) * 0.15;
-  if (v <= MOISTURE_SPEC.lsl + nearBand || v >= MOISTURE_SPEC.usl - nearBand) return "warning";
-  return "ok";
-};
 
 const buildExecApiPayload = (filter: ExecFilterValue): ExecApiPayload => {
   const fmtDate = (d: Date) => format(d, "yyyy-MM-dd");
@@ -71,13 +57,14 @@ const ExecutiveSummary = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const loading      = useAppSelector(selectExecLoading);
-  const error        = useAppSelector(selectExecError);
-  const summaryKpi   = useAppSelector(selectSummaryKpi);
-  const secData      = useAppSelector(selectSecData);
-  const trendData    = useAppSelector(selectTrendData);
-  const top5Data     = useAppSelector(selectTop5Data);
-  const alerts       = useAppSelector(selectAlerts);
+  const loading           = useAppSelector(selectExecLoading);
+  const error             = useAppSelector(selectExecError);
+  const summaryKpi        = useAppSelector(selectSummaryKpi);
+  const secData           = useAppSelector(selectSecData);
+  const trendData         = useAppSelector(selectTrendData);
+  const top5Data          = useAppSelector(selectTop5Data);
+  const alertSummary      = useAppSelector(selectAlertSummary);
+  const humidityMoisture  = useAppSelector(selectHumidityMoisture);
 
   const [weeksData,  setWeeksData]  = useState<WeekOption[]>([]);
   const [monthsData, setMonthsData] = useState<MonthOption[]>([]);
@@ -119,9 +106,6 @@ const ExecutiveSummary = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, execFilter.mode, execFilter.date.getTime(), execFilter.week, execFilter.weekEnd, execFilter.month, execFilter.monthEnd, execFilter.shifts.join(",")]);
 
-  useEffect(() => {
-    dispatch(fetchAlertsData());
-  }, [dispatch]);
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -155,25 +139,14 @@ const ExecutiveSummary = () => {
     return [...top5Items].sort((a, b) => (b as any)[key] - (a as any)[key]).map((item, i) => ({ ...item, rank: i + 1 }));
   }, [top5Mode, top5Items]);
 
-  // Moisture sensor rows derived from summaryKpi.avgMoisture
-  const { moistureSensors, moistureMax } = useMemo(() => {
-    if (!summaryKpi) return { moistureSensors: [], moistureMax: 15 };
-    const base = summaryKpi.avgMoisture;
-    const sensors = [
-      { name: "M1", value: +(base - 0.4).toFixed(2) },
-      { name: "M2", value: +(base - 0.1).toFixed(2) },
-      { name: "M3", value: +(base + 0.2).toFixed(2) },
-      { name: "M4", value: +(base + 0.6).toFixed(2) },
-    ];
-    return { moistureSensors: sensors, moistureMax: Math.max(...sensors.map((s) => s.value), MOISTURE_SPEC.usl) };
-  }, [summaryKpi]);
+  const moistureSensors = humidityMoisture?.moisture ?? [];
 
   const alertKpi = useMemo(() => ({
-    total:        alerts.length,
-    critical:     alerts.filter((a) => a.severity === "Critical").length,
-    warning:      alerts.filter((a) => a.severity === "Warning").length,
-    acknowledged: alerts.filter((a) => a.acknowledged).length,
-  }), [alerts]);
+    total:        alertSummary?.total        ?? 0,
+    critical:     alertSummary?.critical     ?? 0,
+    warning:      alertSummary?.warning      ?? 0,
+    acknowledged: alertSummary?.acknowledged ?? 0,
+  }), [alertSummary]);
 
   const chartTitle =
     execFilter.mode === "day"   ? "Energy Consumption Trend (Day)"     :
@@ -271,27 +244,18 @@ const ExecutiveSummary = () => {
             <span className="exec-card-label">Moisture Sensors Overview</span>
             <div className="exec-card-icon-wrap"><Droplets className="exec-card-icon" /></div>
           </div>
-          <div className="exec-moisture-list">
-            {moistureSensors.map((s) => {
-              const status = getMoistureStatus(s.value);
-              const pct = Math.min(100, (s.value / moistureMax) * 100);
-              return (
-                <div key={s.name} className="exec-moisture-row">
-                  <span className="exec-moisture-name">{s.name}</span>
-                  <div className="exec-moisture-bar">
-                    <MoistureFillBar pct={pct} status={status} />
-                  </div>
-                  <span className={`exec-moisture-value exec-moisture-value--${status}`}>{s.value}%</span>
-                </div>
-              );
-            })}
-          </div>
+          <MoistureBarChart
+            data={moistureSensors}
+            lsl={MOISTURE_SPEC.lsl}
+            target={MOISTURE_SPEC.target}
+            usl={MOISTURE_SPEC.usl}
+          />
           <p className="exec-drill-hint">click for Process Analysis →</p>
         </motion.div>
 
         <KpiCard
           title="Avg Humidity"
-          value={summaryKpi.avgHumidity}
+          value={humidityMoisture?.humidity.total ?? summaryKpi.avgHumidity}
           unit="% RH"
           icon={Wind}
           accentColor="humidity"

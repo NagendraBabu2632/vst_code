@@ -631,3 +631,49 @@
     grid-template-columns: 1fr 1fr 2fr auto;
   }
 }
+
+/* ── Moisture spec table pagination ─────────────────────────────────────────── */
+.spec-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+}
+.spec-pagination-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.spec-pagination-btn:hover:not(:disabled) {
+  background: var(--accent);
+}
+.spec-pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.spec-pagination-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+.spec-pagination-info {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+.spec-pagination-info strong {
+  color: var(--foreground);
+}
+.spec-pagination-range {
+  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+}

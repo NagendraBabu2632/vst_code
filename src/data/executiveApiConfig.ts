@@ -1,10 +1,12 @@
 // ─── Executive Summary API Endpoint Configurations ───────────────────────────
 
 export const EXEC_ENDPOINTS = {
-  SUMMARY:       '/executive/summary',
-  SEC:           '/executive/sec',
-  TREND:         '/executive/trend',
-  TOP_CONSUMERS: '/executive/top-consumers',
+  SUMMARY:           '/executive/summary',
+  SEC:               '/executive/sec',
+  TREND:             '/executive/trend',
+  TOP_CONSUMERS:     '/executive/top-consumers',
+  ALERT_SUMMARY:     '/executive/alert-summary',
+  HUMIDITY_MOISTURE: '/executive/humidity-moisture',
 } as const;
 
 // A=1, B=2, C=3, Daily(D)=4
@@ -109,6 +111,24 @@ export const EXEC_MOCK = {
       { rank: 3, feederName: 'Incinerator-01',  zone: 'Utility', kwh: 175,  cost: 1400 },
       { rank: 4, feederName: 'STP-02',          zone: 'Utility', kwh: 145,  cost: 1160 },
     ],
+  },
+
+  alertSummary: {
+    total:        0,
+    critical:     0,
+    warning:      0,
+    acknowledged: 0,
+  },
+
+  humidityMoisture: {
+    humidity: { pmd: 0, smd: 0, total: 0 },
+    moisture: [] as Array<{
+      machineId: number;
+      location: string;
+      line: string;
+      tagName: string;
+      avgMoisture: number | null;
+    }>,
   },
 
 };

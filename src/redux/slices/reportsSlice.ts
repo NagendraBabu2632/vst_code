@@ -1,11 +1,12 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/services/api";
-import type { EnergyReportItem, AlertReportItem, ProductionReportItem } from "@/services/api";
+import type { EnergyReportItem, AlertReportItem, ProductionReportItem, ProcessParamReportItem } from "@/services/api";
 
 interface ReportsState {
   energyItems: EnergyReportItem[];
   alertItems: AlertReportItem[];
   productionItems: ProductionReportItem[];
+  processParamItems: ProcessParamReportItem[];
   loading: boolean;
   error: string | null;
 }
@@ -14,6 +15,7 @@ const initialState: ReportsState = {
   energyItems: [],
   alertItems: [],
   productionItems: [],
+  processParamItems: [],
   loading: false,
   error: null,
 };
@@ -29,6 +31,20 @@ export const fetchReportData = createAsyncThunk(
       return { reportName: params.reportName, data };
     } catch (err: any) {
       return rejectWithValue(err.message ?? "Failed to fetch report data");
+    }
+  }
+);
+
+export const fetchProcessParamReportData = createAsyncThunk(
+  "reports/fetchProcessParams",
+  async (
+    params: { parameter: string; unit?: string; machineId?: number; startDate: number; endDate: number },
+    { rejectWithValue }
+  ) => {
+    try {
+      return await apiService.fetchProcessParamReport(params);
+    } catch (err: any) {
+      return rejectWithValue(err.message ?? "Failed to fetch process param report");
     }
   }
 );
@@ -54,14 +70,27 @@ const reportsSlice = createSlice({
       .addCase(fetchReportData.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      .addCase(fetchProcessParamReportData.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchProcessParamReportData.fulfilled, (state, action) => {
+        state.loading = false;
+        state.processParamItems = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchProcessParamReportData.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       });
   },
 });
 
 export default reportsSlice.reducer;
 
-export const selectReportsLoading        = (s: { reports: ReportsState }) => s.reports.loading;
-export const selectReportsError          = (s: { reports: ReportsState }) => s.reports.error;
-export const selectEnergyReportItems     = (s: { reports: ReportsState }) => s.reports.energyItems;
-export const selectAlertReportItems      = (s: { reports: ReportsState }) => s.reports.alertItems;
-export const selectProductionReportItems = (s: { reports: ReportsState }) => s.reports.productionItems;
+export const selectReportsLoading           = (s: { reports: ReportsState }) => s.reports.loading;
+export const selectReportsError             = (s: { reports: ReportsState }) => s.reports.error;
+export const selectEnergyReportItems        = (s: { reports: ReportsState }) => s.reports.energyItems;
+export const selectAlertReportItems         = (s: { reports: ReportsState }) => s.reports.alertItems;
+export const selectProductionReportItems    = (s: { reports: ReportsState }) => s.reports.productionItems;
+export const selectProcessParamReportItems  = (s: { reports: ReportsState }) => s.reports.processParamItems;
