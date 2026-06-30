@@ -426,6 +426,8 @@ const ProcessFilters = () => {
   const pickerInitialTo   = pickerMatchesCurrent && selections.dateRangeTo
     ? new Date(selections.dateRangeTo)   : undefined;
 
+  const isMoisture = selections.processParameter?.toLowerCase() === "moisture";
+
   return (
     <div className="process-filters">
       {/* ── Asset filters */}
@@ -496,8 +498,8 @@ const ProcessFilters = () => {
         />
       </div>
 
-      {/* ── Blend — hidden for SMD unit */}
-      {selections.unit !== "SMD" && (
+      {/* ── Blend — only for Moisture parameter */}
+      {isMoisture && (
         <div className="process-filter-field--family">
           <label className="process-filter-label">Blend</label>
           <Dropdown
@@ -528,7 +530,7 @@ const ProcessFilters = () => {
       )}
 
       {/* ── Blend Run Times */}
-      {selections.unit !== "SMD" && selections.family && selections.period && runTimes.length > 0 && (
+      {isMoisture && selections.family && selections.period && runTimes.length > 0 && (
         <div className="process-filter-field--runtimes">
           <label className="process-filter-run-label">
             <Clock className="process-filter-run-label__icon" />

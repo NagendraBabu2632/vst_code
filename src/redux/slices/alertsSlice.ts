@@ -110,5 +110,7 @@ export const selectAlertsKpi     = (s: { alerts: AlertsState }) => ({
   warningAlerts:  s.alerts.warningAlerts,
   acknowledged:   s.alerts.acknowledgedCount,
 });
-export const selectAckLoading = (s: { alerts: AlertsState }) => s.alerts.ackLoading;
-export const selectAckError   = (s: { alerts: AlertsState }) => s.alerts.ackError;
+export const selectAckLoading        = (s: { alerts: AlertsState }) => s.alerts.ackLoading;
+export const selectAckError          = (s: { alerts: AlertsState }) => s.alerts.ackError;
+export const selectActiveAlertCount  = (s: { alerts: AlertsState }) =>
+  s.alerts.items.filter((i) => !i.isAcknowledged).length;

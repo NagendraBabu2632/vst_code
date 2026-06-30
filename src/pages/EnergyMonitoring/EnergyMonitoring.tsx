@@ -1,11 +1,16 @@
 import './EnergyMonitoring.css';
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
+import { format, subMonths } from "date-fns";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import Loader from "@/components/Loader/Loader";
 import { motion } from "framer-motion";
+import { CalendarIcon } from "lucide-react";
 import Dropdown from "@/components/Dropdown";
 import EnergyTreeTable from "@/components/EnergyTreeTable";
 import type { EnergyPeriod } from "@/components/EnergyTreeTable";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
 import {
   fetchEnergyMonitoringData,
@@ -19,14 +24,15 @@ import {
   buildEnergyPayload,
 } from "@/redux/slices/dropdownSlice";
 
-type PeriodOption = EnergyPeriod;
+type PeriodOption = EnergyPeriod | "custom";
 
-const periodLabels: Record<PeriodOption, string> = {
+const periodLabels: Record<string, string> = {
   today: "Today",
   yesterday: "Yesterday",
   "7days": "Last 7 Days",
   "30days": "Last 30 Days",
   month: "This Month",
+  custom: "Custom Range",
 };
 
 const EnergyMonitoring = () => {
@@ -36,15 +42,30 @@ const EnergyMonitoring = () => {
   const selections = useAppSelector(selectDropdownSelections);
   const period = (selections.period as PeriodOption) ?? "today";
 
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate,   setEndDate]   = useState<Date | undefined>();
+  const [startOpen, setStartOpen] = useState(false);
+  const [endOpen,   setEndOpen]   = useState(false);
+
   // Reset this page's dropdowns to defaults on every mount
   useEffect(() => {
     dispatch(resetPageSelections({ period: "today" }));
   }, [dispatch]);
 
   useEffect(() => {
+    if (period === "custom" && startDate)
+      dispatch(setDropdownSelection({ key: "dateRangeFrom", value: format(startDate, "yyyy-MM-dd") }));
+  }, [dispatch, period, startDate]);
+
+  useEffect(() => {
+    if (period === "custom" && endDate)
+      dispatch(setDropdownSelection({ key: "dateRangeTo", value: format(endDate, "yyyy-MM-dd") }));
+  }, [dispatch, period, endDate]);
+
+  useEffect(() => {
     dispatch(fetchEnergyMonitoringData(buildEnergyPayload(selections)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, selections.period]);
+  }, [dispatch, selections.period, selections.dateRangeFrom, selections.dateRangeTo]);
 
   if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 
@@ -59,12 +80,51 @@ const EnergyMonitoring = () => {
               value={period}
               onValueChange={(v) => dispatch(setDropdownSelection({ key: "period", value: v }))}
               triggerClassName="w-[150px]"
-              options={(Object.keys(periodLabels) as PeriodOption[]).map((k) => ({
+              options={Object.keys(periodLabels).map((k) => ({
                 value: k,
                 label: periodLabels[k],
               }))}
             />
           </div>
+
+          {period === "custom" && (
+            <>
+              <div className="energy-field">
+                <label className="energy-field-label">Start Date</label>
+                <Popover open={startOpen} onOpenChange={setStartOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="reports-date-btn">
+                      <CalendarIcon className="reports-cal-icon" />
+                      {startDate ? format(startDate, "dd MMM yyyy") : "Select"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={startDate} autoFocus
+                      fromDate={subMonths(new Date(), 6)} toDate={new Date()}
+                      disabled={(d) => d > new Date() || d < subMonths(new Date(), 6)}
+                      onSelect={(date) => { setStartDate(date); if (date && endDate && endDate < date) setEndDate(undefined); setStartOpen(false); }} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="energy-field">
+                <label className="energy-field-label">End Date</label>
+                <Popover open={endOpen} onOpenChange={setEndOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="reports-date-btn">
+                      <CalendarIcon className="reports-cal-icon" />
+                      {endDate ? format(endDate, "dd MMM yyyy") : "Select"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={endDate} autoFocus
+                      fromDate={startDate ?? subMonths(new Date(), 6)} toDate={new Date()}
+                      disabled={(d) => d > new Date() || d < (startDate ?? subMonths(new Date(), 6))}
+                      onSelect={(date) => { setEndDate(date); setEndOpen(false); }} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -77,7 +137,7 @@ const EnergyMonitoring = () => {
                 : "Daily Consumption (kWh) — Unit › Line › Asset"}
             </h3>
           </div>
-          <EnergyTreeTable period={period} />
+          <EnergyTreeTable period={period as EnergyPeriod} />
         </motion.div>
       )}
     </DashboardLayout>

@@ -1,5 +1,6 @@
 import './AlertsPage.css';
 import { useState, useMemo, useEffect } from "react";
+import { format, subMonths } from "date-fns";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import Loader from "@/components/Loader/Loader";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
@@ -22,12 +23,14 @@ import {
 } from "@/redux/slices/dropdownSlice";
 import { motion } from "framer-motion";
 import {
-  AlertTriangle, CheckCircle, XCircle, Eye, Clock, User,
+  AlertTriangle, CheckCircle, XCircle, Eye, Clock, User, CalendarIcon,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Dropdown from "@/components/Dropdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -133,13 +136,18 @@ const AlertsPage = () => {
   const [filterParam,  setFilterParam]  = useState("All");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "acknowledged">("all");
   const [severityTab,  setSeverityTab]  = useState("all");
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate,   setEndDate]   = useState<Date | undefined>();
+  const [startOpen, setStartOpen] = useState(false);
+  const [endOpen,   setEndOpen]   = useState(false);
 
   const unitOpts   = (dropdownData?.common?.units   ?? [{ value: "PMD", label: "PMD" }, { value: "SMD", label: "SMD" }]) as { value: string; label: string }[];
-  const periodOpts = (dropdownData?.alertsPage?.period?.options ?? [
+  const basePeriodOpts = (dropdownData?.alertsPage?.period?.options ?? [
     { value: "last1h",  label: "Last One Hour" },
     { value: "last24h", label: "Last 24 Hours" },
     { value: "last1m",  label: "Last One Month" },
   ]) as { value: string; label: string }[];
+  const periodOpts = [...basePeriodOpts, { value: "custom", label: "Custom Range" }];
 
   const set = (key: Parameters<typeof setDropdownSelection>[0]["key"]) =>
     (value: string) => dispatch(setDropdownSelection({ key, value }));
@@ -152,9 +160,19 @@ const AlertsPage = () => {
   }, [dispatch, dropdownData]);
 
   useEffect(() => {
+    if (selections.period === "custom" && startDate)
+      dispatch(setDropdownSelection({ key: "dateRangeFrom", value: format(startDate, "yyyy-MM-dd") }));
+  }, [dispatch, selections.period, startDate]);
+
+  useEffect(() => {
+    if (selections.period === "custom" && endDate)
+      dispatch(setDropdownSelection({ key: "dateRangeTo", value: format(endDate, "yyyy-MM-dd") }));
+  }, [dispatch, selections.period, endDate]);
+
+  useEffect(() => {
     dispatch(fetchAlertsData(buildAlertsPayload(selections, filterParam)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, selections.unit, selections.period, filterParam]);
+  }, [dispatch, selections.unit, selections.period, selections.dateRangeFrom, selections.dateRangeTo, filterParam]);
 
   const filtered = useMemo(() => {
     let list = alerts;
@@ -197,6 +215,45 @@ const AlertsPage = () => {
             <label className="alerts-filter-label">Period</label>
             <Dropdown value={selections.period} onValueChange={set("period")} options={periodOpts} />
           </div>
+
+          {selections.period === "custom" && (
+            <>
+              <div className="alerts-filter">
+                <label className="alerts-filter-label">Start Date</label>
+                <Popover open={startOpen} onOpenChange={setStartOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="reports-date-btn">
+                      <CalendarIcon className="reports-cal-icon" />
+                      {startDate ? format(startDate, "dd MMM yyyy") : "Select"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={startDate} autoFocus
+                      fromDate={subMonths(new Date(), 6)} toDate={new Date()}
+                      disabled={(d) => d > new Date() || d < subMonths(new Date(), 6)}
+                      onSelect={(date) => { setStartDate(date); if (date && endDate && endDate < date) setEndDate(undefined); setStartOpen(false); }} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="alerts-filter">
+                <label className="alerts-filter-label">End Date</label>
+                <Popover open={endOpen} onOpenChange={setEndOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="reports-date-btn">
+                      <CalendarIcon className="reports-cal-icon" />
+                      {endDate ? format(endDate, "dd MMM yyyy") : "Select"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="popover-content--calendar" align="start">
+                    <Calendar mode="single" selected={endDate} autoFocus
+                      fromDate={startDate ?? subMonths(new Date(), 6)} toDate={new Date()}
+                      disabled={(d) => d > new Date() || d < (startDate ?? subMonths(new Date(), 6))}
+                      onSelect={(date) => { setEndDate(date); setEndOpen(false); }} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </>
+          )}
 
           <div className="alerts-filter">
             <label className="alerts-filter-label">Status</label>

@@ -9,7 +9,8 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import darkLogo from "@/assets/VST_Logo.png";
 import lightLogo from "@/assets/lightthemelogo.png";
-import { useAppSelector } from "@/redux/hooks/reduxHooks";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
+import { fetchAlertsData, selectActiveAlertCount } from "@/redux/slices/alertsSlice";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -28,9 +29,21 @@ const SETTINGS_TABS = [
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const theme = useAppSelector((s) => s.theme.theme);
-  const logo = theme === "dark" ? darkLogo : lightLogo;
+  const theme        = useAppSelector((s) => s.theme.theme);
+  const activeAlerts = useAppSelector(selectActiveAlertCount);
+  const logo         = theme === "dark" ? darkLogo : lightLogo;
+
+  useEffect(() => {
+    const fetch24h = () => {
+      const now = Date.now();
+      dispatch(fetchAlertsData({ startDate: now - 24 * 60 * 60 * 1000, endDate: now }));
+    };
+    fetch24h();
+    const interval = setInterval(fetch24h, 60_000);
+    return () => clearInterval(interval);
+  }, [dispatch]);
 
   useEffect(() => {
     const onMouseUp = () => document.body.classList.remove("main-dragging");
@@ -59,7 +72,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <TooltipTrigger asChild>
                 <Link to="/alerts" className="layout__icon-btn" aria-label="Alerts">
                   <Bell />
-                  <span className="layout__alert-badge">2</span>
+                  {activeAlerts > 0 && (
+                    <span className="layout__alert-badge">{activeAlerts > 99 ? "99+" : activeAlerts}</span>
+                  )}
                 </Link>
               </TooltipTrigger>
               <TooltipContent>Alerts</TooltipContent>

@@ -166,7 +166,14 @@ export const periodToTimestamps = (period: string): { startDate: number; endDate
 
 /** Alerts: unit, parameterType + timestamp range */
 export const buildAlertsPayload = (s: DropdownSelections, parameterType?: string): AlertsApiPayload => {
-  const { startDate, endDate } = periodToTimestamps(s.period || "last24h");
+  let startDate: number;
+  let endDate: number;
+  if (s.period === "custom" && s.dateRangeFrom && s.dateRangeTo) {
+    startDate = new Date(s.dateRangeFrom + "T00:00:00").getTime();
+    endDate   = new Date(s.dateRangeTo   + "T23:59:59").getTime();
+  } else {
+    ({ startDate, endDate } = periodToTimestamps(s.period || "last24h"));
+  }
   return {
     unit: s.unit || undefined,
     parameterType: parameterType && parameterType !== "All" ? parameterType : undefined,

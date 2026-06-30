@@ -1,6 +1,6 @@
 import './ReportsPage.css';
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { format } from "date-fns";
+import { format, subMonths } from "date-fns";
 import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import Loader from "@/components/Loader/Loader";
 import { motion } from "framer-motion";
@@ -71,7 +71,9 @@ const ReportsPage = () => {
 
   const [reportType, setReportType] = useState<ReportType>("energy");
   const [startDate, setStartDate]   = useState<Date | undefined>();
-  const [endDate, setEndDate]       = useState<Date | undefined>();
+  const [endDate,   setEndDate]     = useState<Date | undefined>();
+  const [startOpen, setStartOpen]   = useState(false);
+  const [endOpen,   setEndOpen]     = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage]             = useState(1);
   const [exporting, setExporting]   = useState(false);
@@ -437,7 +439,7 @@ const ReportsPage = () => {
             <>
               <div className="reports-date-field">
                 <label className="reports-filter-label">Start Date</label>
-                <Popover>
+                <Popover open={startOpen} onOpenChange={setStartOpen}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="reports-date-btn">
                       <CalendarIcon className="reports-cal-icon" />
@@ -445,13 +447,16 @@ const ReportsPage = () => {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="popover-content--calendar" align="start">
-                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
+                    <Calendar mode="single" selected={startDate} autoFocus
+                      fromDate={subMonths(new Date(), 6)} toDate={new Date()}
+                      disabled={(d) => d > new Date() || d < subMonths(new Date(), 6)}
+                      onSelect={(date) => { setStartDate(date); if (date && endDate && endDate < date) setEndDate(undefined); setStartOpen(false); }} />
                   </PopoverContent>
                 </Popover>
               </div>
               <div className="reports-date-field">
                 <label className="reports-filter-label">End Date</label>
-                <Popover>
+                <Popover open={endOpen} onOpenChange={setEndOpen}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="reports-date-btn">
                       <CalendarIcon className="reports-cal-icon" />
@@ -459,7 +464,10 @@ const ReportsPage = () => {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="popover-content--calendar" align="start">
-                    <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
+                    <Calendar mode="single" selected={endDate} autoFocus
+                      fromDate={startDate ?? subMonths(new Date(), 6)} toDate={new Date()}
+                      disabled={(d) => d > new Date() || d < (startDate ?? subMonths(new Date(), 6))}
+                      onSelect={(date) => { setEndDate(date); setEndOpen(false); }} />
                   </PopoverContent>
                 </Popover>
               </div>
