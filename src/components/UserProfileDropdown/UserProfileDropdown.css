@@ -66,6 +66,12 @@
   color: var(--foreground);
 }
 
+.user-profile__menu-role {
+  font-size: 0.75rem;
+  color: var(--primary);
+  margin-top: 0.125rem;
+}
+
 .user-profile__menu-email {
   font-size: 0.75rem;
   color: var(--muted-foreground);

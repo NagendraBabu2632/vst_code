@@ -573,16 +573,16 @@ export const SPCHistogramChart = ({
       return "hsl(0, 75%, 55%)";
     if ((lcl !== undefined && mid < lcl) || (ucl !== undefined && mid > ucl))
       return "hsl(38, 95%, 55%)";
-    return lineColor;
+    return "hsl(210, 90%, 55%)";
   };
 
   // Vertical reference lines ordered so narrower limits draw on top
   const refLines: RefLine[] = showLimits ? [
-    lsl    !== undefined ? { val: lsl,    label: "LSL",    color: "hsl(0, 85%, 60%)",    strokeWidth: 2 } : null,
-    usl    !== undefined ? { val: usl,    label: "USL",    color: "hsl(0, 85%, 60%)",    strokeWidth: 2 } : null,
+    lsl    !== undefined ? { val: lsl,    label: "LSL",    color: "hsl(215, 20%, 35%)",  strokeWidth: 2 } : null,
+    usl    !== undefined ? { val: usl,    label: "USL",    color: "hsl(215, 20%, 35%)",  strokeWidth: 2 } : null,
     lcl    !== undefined ? { val: lcl,    label: "LCL",    color: "hsl(38, 95%, 55%)",   strokeWidth: 1.5, dash: "5 3" } : null,
     ucl    !== undefined ? { val: ucl,    label: "UCL",    color: "hsl(38, 95%, 55%)",   strokeWidth: 1.5, dash: "5 3" } : null,
-    target !== undefined ? { val: target, label: "Target", color: "hsl(210, 100%, 60%)", strokeWidth: 1.5, dash: "4 4" } : null,
+    target !== undefined ? { val: target, label: "Target", color: "hsl(145, 65%, 40%)",  strokeWidth: 1.5 } : null,
   ].filter(Boolean) as RefLine[] : [];
 
   const showTip = useCallback((e: React.MouseEvent, d: HistogramBin) => {

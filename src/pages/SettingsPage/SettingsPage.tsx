@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import Dropdown from "@/components/Dropdown";
+import ConfirmDialog from "@/components/ConfirmDialog/ConfirmDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -41,6 +42,10 @@ const SettingsPage = () => {
   const [editBlendFamilyId, setEditBlendFamilyId] = useState("");
   const [editBlendDescription, setEditBlendDescription] = useState("");
   const [editBlendStatus, setEditBlendStatus] = useState<"Active" | "Inactive">("Active");
+  const [blendToDelete, setBlendToDelete] = useState<Blend | null>(null);
+  const [blendDeleting, setBlendDeleting] = useState(false);
+  const [specToDelete, setSpecToDelete] = useState<MoistureSpecDto | null>(null);
+  const [specDeleting, setSpecDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const blendFileInputRef = useRef<HTMLInputElement>(null);
   const prodFileInputRef = useRef<HTMLInputElement>(null);
@@ -154,6 +159,17 @@ const SettingsPage = () => {
     }
   };
 
+  const confirmDeleteMoistureSpec = async () => {
+    if (!specToDelete) return;
+    setSpecDeleting(true);
+    try {
+      await handleDeleteMoistureSpec(specToDelete.id);
+    } finally {
+      setSpecDeleting(false);
+      setSpecToDelete(null);
+    }
+  };
+
   const handleMoistureDownloadTemplate = async () => {
     try {
       await apiService.downloadMoistureSpecTemplate();
@@ -247,6 +263,17 @@ const SettingsPage = () => {
       await loadBlends();
     } catch {
       toast.error("Failed to delete blend");
+    }
+  };
+
+  const confirmDeleteBlend = async () => {
+    if (!blendToDelete) return;
+    setBlendDeleting(true);
+    try {
+      await handleDeleteBlend(blendToDelete.blendId);
+    } finally {
+      setBlendDeleting(false);
+      setBlendToDelete(null);
     }
   };
 
@@ -456,7 +483,7 @@ const SettingsPage = () => {
                             <td>
                               <div className="settings-actions-cell">
                                 <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => startEditBlend(blend)}><Pencil /></Button>
-                                <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => handleDeleteBlend(blend.blendId)}><Trash2 /></Button>
+                                <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => setBlendToDelete(blend)}><Trash2 /></Button>
                               </div>
                             </td>
                           </>
@@ -585,7 +612,7 @@ const SettingsPage = () => {
                           <td>
                             <div className="settings-actions-cell">
                               <Switch checked={s.isActive} onCheckedChange={() => handleToggleMoistureSpec(s)} title={s.isActive ? "Deactivate" : "Activate"} />
-                              <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => handleDeleteMoistureSpec(s.id)}><Trash2 /></Button>
+                              <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => setSpecToDelete(s)}><Trash2 /></Button>
                             </div>
                           </td>
                         </tr>
@@ -818,6 +845,24 @@ const SettingsPage = () => {
           {activeTab === "alerts" && (
             <AlertConfigurator />
           )}
+
+          <ConfirmDialog
+            open={blendToDelete !== null}
+            title="Delete Blend"
+            message={<>Are you sure you want to delete <strong>{blendToDelete?.blendName}</strong>? This action cannot be undone.</>}
+            loading={blendDeleting}
+            onConfirm={confirmDeleteBlend}
+            onCancel={() => setBlendToDelete(null)}
+          />
+
+          <ConfirmDialog
+            open={specToDelete !== null}
+            title="Delete Moisture Spec"
+            message={<>Are you sure you want to delete the spec for <strong>{specToDelete?.machineName} · {specToDelete?.blendName}</strong> ({specToDelete?.quarterLabel} {specToDelete?.year})? This action cannot be undone.</>}
+            loading={specDeleting}
+            onConfirm={confirmDeleteMoistureSpec}
+            onCancel={() => setSpecToDelete(null)}
+          />
       </div>
     </DashboardLayout>
   );
@@ -843,6 +888,10 @@ const TariffSection = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [tariffToDelete, setTariffToDelete] = useState<TariffMaster | null>(null);
+  const [tariffDeleting, setTariffDeleting] = useState(false);
+  const [bandToDelete, setBandToDelete] = useState<{ band: BandDraft; idx: number } | null>(null);
+  const [bandDeleting, setBandDeleting] = useState(false);
 
   const [fCode, setFCode] = useState("");
   const [fType, setFType] = useState("ToD");
@@ -975,6 +1024,17 @@ const TariffSection = () => {
     }
   };
 
+  const confirmDeleteTariff = async () => {
+    if (!tariffToDelete) return;
+    setTariffDeleting(true);
+    try {
+      await removeTariff(tariffToDelete.tariffID);
+    } finally {
+      setTariffDeleting(false);
+      setTariffToDelete(null);
+    }
+  };
+
   const handleAddBand = async () => {
     const rate = parseFloat(newBandRate);
     if (isNaN(rate) || rate <= 0) { toast.error("Band rate must be > 0"); return; }
@@ -1016,6 +1076,17 @@ const TariffSection = () => {
       }
     } else {
       setBands(prev => prev.filter((_, i) => i !== idx));
+    }
+  };
+
+  const confirmDeleteBand = async () => {
+    if (!bandToDelete) return;
+    setBandDeleting(true);
+    try {
+      await handleDeleteBand(bandToDelete.band, bandToDelete.idx);
+    } finally {
+      setBandDeleting(false);
+      setBandToDelete(null);
     }
   };
 
@@ -1141,7 +1212,7 @@ const TariffSection = () => {
                   <td>
                     <div className="settings-actions-cell">
                       <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => openEdit(t)}><Pencil /></Button>
-                      <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => removeTariff(t.tariffID)}><Trash2 /></Button>
+                      <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => setTariffToDelete(t)}><Trash2 /></Button>
                     </div>
                   </td>
                 </tr>
@@ -1290,7 +1361,7 @@ const TariffSection = () => {
                               <td>
                                 <div className="settings-actions-cell">
                                   <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => startBandEdit(idx)}><Pencil /></Button>
-                                  <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => handleDeleteBand(b, idx)}><Trash2 /></Button>
+                                  <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => setBandToDelete({ band: b, idx })}><Trash2 /></Button>
                                 </div>
                               </td>
                             </>
@@ -1326,6 +1397,24 @@ const TariffSection = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={tariffToDelete !== null}
+        title="Delete Tariff"
+        message={<>Are you sure you want to delete tariff <strong>{tariffToDelete?.tariffCode}</strong>? This action cannot be undone.</>}
+        loading={tariffDeleting}
+        onConfirm={confirmDeleteTariff}
+        onCancel={() => setTariffToDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={bandToDelete !== null}
+        title="Delete Band"
+        message={<>Are you sure you want to delete the <strong>{bandToDelete?.band.bandName}</strong> band ({bandToDelete ? hrLabel(bandToDelete.band.startHour) : ""}–{bandToDelete ? hrLabel(bandToDelete.band.endHour) : ""})?</>}
+        loading={bandDeleting}
+        onConfirm={confirmDeleteBand}
+        onCancel={() => setBandToDelete(null)}
+      />
     </motion.div>
   );
 };
@@ -1477,6 +1566,8 @@ const AlertConfigurator = () => {
   const [emailInput, setEmailInput] = useState("");
   const [dailyUserInput, setDailyUserInput] = useState("");
   const [shiftUserInput, setShiftUserInput] = useState("");
+  const [ruleToDelete, setRuleToDelete] = useState<AlertRule | null>(null);
+  const [ruleDeleting, setRuleDeleting] = useState(false);
 
   const dropdownData = useAppSelector(selectDropdownData);
   const unitOpts = (dropdownData?.common?.units ?? []) as { value: string; label: string }[];
@@ -1571,6 +1662,17 @@ const AlertConfigurator = () => {
       setRules((prev) => prev.filter((r) => r.ruleId !== rule.ruleId));
     } catch {
       toast.error("Failed to delete alert rule");
+    }
+  };
+
+  const confirmDeleteRule = async () => {
+    if (!ruleToDelete) return;
+    setRuleDeleting(true);
+    try {
+      await removeRule(ruleToDelete);
+    } finally {
+      setRuleDeleting(false);
+      setRuleToDelete(null);
     }
   };
 
@@ -1671,7 +1773,7 @@ const AlertConfigurator = () => {
                 <td>
                   <div className="settings-actions-cell">
                     <Button size="icon" variant="ghost" className="settings-btn-icon" onClick={() => openEdit(r)}><Pencil /></Button>
-                    <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => removeRule(r)}><Trash2 /></Button>
+                    <Button size="icon" variant="ghost" className="settings-btn-icon settings-btn--destructive" onClick={() => setRuleToDelete(r)}><Trash2 /></Button>
                   </div>
                 </td>
               </tr>
@@ -1862,6 +1964,15 @@ const AlertConfigurator = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={ruleToDelete !== null}
+        title="Delete Alert Rule"
+        message={<>Are you sure you want to delete alert rule <strong>{ruleToDelete?.name}</strong>? This action cannot be undone.</>}
+        loading={ruleDeleting}
+        onConfirm={confirmDeleteRule}
+        onCancel={() => setRuleToDelete(null)}
+      />
     </motion.div>
   );
 };

@@ -1,0 +1,14 @@
+.confirm-dialog {
+  max-width: 26rem;
+}
+.confirm-dialog-message {
+  font-size: 0.875rem;
+  color: var(--foreground);
+  margin: 0;
+}
+.confirm-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
