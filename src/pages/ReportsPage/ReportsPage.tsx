@@ -451,14 +451,6 @@ const ReportsPage = () => {
             </div>
           )}
 
-          {/* Shift — process only */}
-          {reportType === "process" && (
-            <div className="reports-filter">
-              <label className="reports-filter-label">Shift</label>
-              <Dropdown value={selections.shift} onValueChange={set("shift")} options={shiftOpts.length ? shiftOpts : [{ value: "All", label: "All" }]} />
-            </div>
-          )}
-
           {/* Period — always visible */}
           <div className="reports-filter">
             <label className="reports-filter-label">Period</label>

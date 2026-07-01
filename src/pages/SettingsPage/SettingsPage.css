@@ -1,9 +1,5 @@
 /* SettingsPage styles */
 
-.settings-page {
-  max-width: 72rem;
-}
-
 .settings-section {
   display: flex;
   flex-direction: column;

@@ -747,8 +747,8 @@ export const apiService = {
     return res.data as AlertsResponse;
   },
 
-  async acknowledgeAlert(alertId: number) {
-    const res = await apiClient.post(`/alerts/${alertId}/acknowledge`, {});
+  async acknowledgeAlert(alertId: number, acknowledgedBy: string) {
+    const res = await apiClient.post(`/alerts/${alertId}/acknowledge`, { acknowledgedBy });
     return res.data as AcknowledgeAlertResponse;
   },
 

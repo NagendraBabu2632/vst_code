@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/services/api";
 import type { AlertApiItem, AlertsResponse } from "@/services/api";
 import type { AlertsApiPayload } from "@/redux/slices/dropdownSlice";
+import type { RootState } from "@/redux/store";
 
 export type AlertItem = AlertApiItem & { acknowledgedComment?: string };
 
@@ -42,9 +43,10 @@ export const fetchAlertsData = createAsyncThunk(
 
 export const acknowledgeAlertAsync = createAsyncThunk(
   "alerts/acknowledge",
-  async ({ alertId, comment }: { alertId: number; comment: string }, { rejectWithValue }) => {
+  async ({ alertId, comment }: { alertId: number; comment: string }, { getState, rejectWithValue }) => {
     try {
-      const response = await apiService.acknowledgeAlert(alertId);
+      const acknowledgedBy = (getState() as RootState).auth.user?.name ?? "Unknown";
+      const response = await apiService.acknowledgeAlert(alertId, acknowledgedBy);
       return { ...response, acknowledgedComment: comment };
     } catch (err: any) {
       return rejectWithValue(err.message ?? "Failed to acknowledge alert");

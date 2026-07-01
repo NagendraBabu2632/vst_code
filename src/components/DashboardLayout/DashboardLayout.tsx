@@ -1,6 +1,6 @@
 import "./DashboardLayout.css";
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Bell, Settings, ChevronRight } from "lucide-react";
 import AppSidebar from "@/components/AppSidebar/AppSidebar";
 import ThemeToggle from "@/components/ThemeToggle/ThemeToggle";
@@ -27,15 +27,20 @@ const SETTINGS_TABS = [
   { value: "alerts", label: "Alert Configurator" },
 ];
 
+const ALERTS_POLL_PATHS = ["/", "/alerts"];
+
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useAppDispatch();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const theme        = useAppSelector((s) => s.theme.theme);
   const activeAlerts = useAppSelector(selectActiveAlertCount);
   const logo         = theme === "dark" ? darkLogo : lightLogo;
+  const shouldPollAlerts = ALERTS_POLL_PATHS.includes(location.pathname);
 
   useEffect(() => {
+    if (!shouldPollAlerts) return;
     const fetch24h = () => {
       const now = Date.now();
       dispatch(fetchAlertsData({ startDate: now - 24 * 60 * 60 * 1000, endDate: now }));
@@ -43,7 +48,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     fetch24h();
     const interval = setInterval(fetch24h, 60_000);
     return () => clearInterval(interval);
-  }, [dispatch]);
+  }, [dispatch, shouldPollAlerts]);
 
   useEffect(() => {
     const onMouseUp = () => document.body.classList.remove("main-dragging");

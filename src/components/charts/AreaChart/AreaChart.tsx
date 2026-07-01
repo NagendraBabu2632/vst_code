@@ -124,7 +124,7 @@ export const EnergyTrendAreaChart = ({ data }: EnergyTrendAreaChartProps) => {
                 </text>
               </g>
             ))}
-            <text x={innerW / 2} y={60} textAnchor="middle" fontSize={11} fill={axisStroke}>Date-Time</text>
+            <text x={innerW / 2} y={70} textAnchor="middle" fontSize={11} fill={axisStroke} >Date-Time</text>
           </g>
           {/* Y axis */}
           <line y1={0} y2={innerH} stroke={axisStroke} />

@@ -158,8 +158,8 @@ interface MoistureBarChartProps {
   usl?: number;
 }
 
-const MOIST_HEIGHT = 148;
-const MOIST_MARGIN = { top: 6, right: 46, bottom: 58, left: 28 };
+const MOIST_HEIGHT = 118;
+const MOIST_MARGIN = { top: 6, right: 46, bottom: 30, left: 28 };
 
 const getMoistureBarFill = (v: number | null, lsl: number, usl: number): string => {
   if (v === null) return "hsl(220, 14%, 35%)";
@@ -258,15 +258,14 @@ export const MoistureBarChart = ({
             <line x1={0} x2={innerW} stroke={axisStroke} />
             {data.map((d) => {
               const cx = (x(d.location) ?? 0) + x.bandwidth() / 2;
+              const [firstWord, ...restWords] = d.location.split(" ");
+              const secondLine = restWords.join(" ");
               return (
                 <g key={d.location} transform={`translate(${cx},0)`}>
                   <line y2={3} stroke={axisStroke} />
-                  <text
-                    y={10} textAnchor="end"
-                    transform="rotate(-40)"
-                    fontSize={9} fill={axisStroke}
-                  >
-                    {d.location}
+                  <text textAnchor="middle" fontSize={9} fill={axisStroke}>
+                    <tspan x={0} y={11}>{firstWord}</tspan>
+                    {secondLine && <tspan x={0} y={21}>{secondLine}</tspan>}
                   </text>
                 </g>
               );
