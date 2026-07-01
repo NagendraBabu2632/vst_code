@@ -169,13 +169,13 @@
   border-top: 2px dashed hsl(38, 95%, 55%);
 }
 .process-legend-line--usl {
-  background: hsl(0, 85%, 60%);
+  background: hsl(215, 20%, 35%);
 }
 .process-legend-line--thick {
   height: 3px;
 }
 .process-legend-line--target {
-  border-top: 2px dashed hsl(210, 100%, 60%);
+  background: hsl(145, 65%, 40%);
 }
 .process-legend-line--avg {
   background: hsl(280, 80%, 65%);

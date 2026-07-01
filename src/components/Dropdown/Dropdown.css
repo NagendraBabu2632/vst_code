@@ -6,6 +6,17 @@
   border-color: var(--border);
 }
 
+/* Long selected values shrink and ellipsize instead of overlapping the chevron icon */
+.dropdown-value {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
 .dropdown-content {
   /* Inherits from underlying Select primitive; hook left for future overrides. */
 }

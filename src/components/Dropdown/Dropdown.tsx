@@ -49,7 +49,9 @@ const Dropdown = ({
       disabled={disabled}
     >
       <SelectTrigger className={cn("dropdown-trigger h-9 text-sm", triggerClassName)}>
-        <SelectValue placeholder={placeholder} />
+        <span className="dropdown-value">
+          <SelectValue placeholder={placeholder} />
+        </span>
       </SelectTrigger>
       <SelectContent className={cn("dropdown-content", contentClassName)}>
         {children ??
