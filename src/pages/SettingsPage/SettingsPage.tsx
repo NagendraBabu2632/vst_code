@@ -22,6 +22,8 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { apiService } from "@/services/api";
 import type { AlertRuleApi, TariffMaster, TariffBand, MoistureSpecDto } from "@/services/api";
+import BlendTrackerPage from "@/pages/BlendTrackerPage/BlendTrackerPage";
+import UserManagement from "@/pages/UserManagement/UserManagement";
 
 interface BlendFamily { familyId: number; familyName: string; }
 interface Blend { blendId: number; blendName: string; blendDescription: string; familyId: number; familyName: string; }
@@ -355,7 +357,7 @@ const SettingsPage = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const validTabs = ["sku", "tariff", "moisture-specs", "process", "upload", "ec-losses", "alerts"];
+  const validTabs = ["sku", "tariff", "moisture-specs", "process", "upload", "ec-losses", "alerts", "blend-tracker", "user-management"];
   const urlTab = new URLSearchParams(location.search).get("tab");
   const activeTab = urlTab && validTabs.includes(urlTab) ? urlTab : "sku";
 
@@ -844,6 +846,14 @@ const SettingsPage = () => {
 
           {activeTab === "alerts" && (
             <AlertConfigurator />
+          )}
+
+          {activeTab === "blend-tracker" && (
+            <BlendTrackerPage />
+          )}
+
+          {activeTab === "user-management" && (
+            <UserManagement />
           )}
 
           <ConfirmDialog

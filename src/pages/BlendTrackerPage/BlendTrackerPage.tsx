@@ -2,7 +2,6 @@ import './BlendTrackerPage.css';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Pencil, X, ChevronLeft, ChevronRight, RefreshCw, CalendarIcon, Clock, Plus } from 'lucide-react';
-import DashboardLayout from '@/components/DashboardLayout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Dropdown from '@/components/Dropdown';
@@ -228,7 +227,6 @@ const BlendTrackerPage = () => {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <DashboardLayout>
       <div className="blt-page">
         <h2 className="page-title">Blend Tracker</h2>
 
@@ -486,7 +484,6 @@ const BlendTrackerPage = () => {
           )}
         </AnimatePresence>
       </div>
-    </DashboardLayout>
   );
 };
 

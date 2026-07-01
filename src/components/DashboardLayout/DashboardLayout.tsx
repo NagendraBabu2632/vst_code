@@ -25,6 +25,8 @@ const SETTINGS_TABS = [
   { value: "upload", label: "Production Upload" },
   { value: "ec-losses", label: "Electricity Consumption Losses" },
   { value: "alerts", label: "Alert Configurator" },
+  { value: "blend-tracker", label: "Blend Tracker" },
+  { value: "user-management", label: "User Management" },
 ];
 
 const ALERTS_POLL_PATHS = ["/", "/alerts"];

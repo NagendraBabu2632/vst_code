@@ -1,6 +1,5 @@
 import "./UserManagement.css";
 import { useState, useMemo, useEffect } from "react";
-import DashboardLayout from "@/components/DashboardLayout/DashboardLayout";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
 import {
   fetchUsers,
@@ -174,7 +173,7 @@ const UserManagement = () => {
   const isFormValid = form.username.trim() && form.email.trim();
 
   return (
-    <DashboardLayout>
+    <>
       <div className="um-page">
 
         {/* Header */}
@@ -462,7 +461,7 @@ const UserManagement = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </>
   );
 };
 
