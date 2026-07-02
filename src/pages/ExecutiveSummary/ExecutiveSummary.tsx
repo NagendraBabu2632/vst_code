@@ -68,6 +68,7 @@ const ExecutiveSummary = () => {
 
   const [weeksData,  setWeeksData]  = useState<WeekOption[]>([]);
   const [monthsData, setMonthsData] = useState<MonthOption[]>([]);
+  const [dropdownsReady, setDropdownsReady] = useState(false);
 
   const [execFilter, setExecFilter] = useState<ExecFilterValue>({
     mode: "day",
@@ -79,32 +80,35 @@ const ExecutiveSummary = () => {
     monthEnd: "",
   });
 
-  // Fetch weeks and months directly on mount
+  // Load week/month dropdown data first; only once both have settled do we
+  // allow the Executive Summary API to be called (even for the default "day" mode).
   useEffect(() => {
-    apiService.fetchWeekOptions().then((data) => {
-      setWeeksData(data);
-      const current = data.find((w: WeekOption) => w.isCurrent);
-      if (current) {
-        setExecFilter((prev) => ({ ...prev, week: current.weekStartDate, weekEnd: current.weekEndDate }));
-      }
-    }).catch(() => {});
-
-    apiService.fetchMonthOptions().then((data) => {
-      setMonthsData(data);
-      const current = data.find((m: MonthOption) => m.isCurrent);
-      if (current) {
-        setExecFilter((prev) => ({ ...prev, month: current.monthStartDate, monthEnd: current.monthEndDate }));
-      }
-    }).catch(() => {});
+    Promise.allSettled([
+      apiService.fetchWeekOptions().then((data) => {
+        setWeeksData(data);
+        const current = data.find((w: WeekOption) => w.isCurrent);
+        if (current) {
+          setExecFilter((prev) => ({ ...prev, week: current.weekStartDate, weekEnd: current.weekEndDate }));
+        }
+      }),
+      apiService.fetchMonthOptions().then((data) => {
+        setMonthsData(data);
+        const current = data.find((m: MonthOption) => m.isCurrent);
+        if (current) {
+          setExecFilter((prev) => ({ ...prev, month: current.monthStartDate, monthEnd: current.monthEndDate }));
+        }
+      }),
+    ]).finally(() => setDropdownsReady(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [top5Mode, setTop5Mode] = useState<Top5Mode>("consumption");
   const [top5View, setTop5View] = useState<Top5View>("chart");
 
   useEffect(() => {
+    if (!dropdownsReady) return;
     dispatch(fetchExecutiveSummaryData(buildExecApiPayload(execFilter)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, execFilter.mode, execFilter.date.getTime(), execFilter.week, execFilter.weekEnd, execFilter.month, execFilter.monthEnd, execFilter.shifts.join(",")]);
+  }, [dispatch, dropdownsReady, execFilter.mode, execFilter.date.getTime(), execFilter.week, execFilter.weekEnd, execFilter.month, execFilter.monthEnd, execFilter.shifts.join(",")]);
 
 
   // ── Derived values ────────────────────────────────────────────────────────

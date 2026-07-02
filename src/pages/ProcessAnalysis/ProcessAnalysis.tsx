@@ -344,6 +344,7 @@ const ProcessAnalysis = () => {
   // For Moisture parameter, skip sensor/data fetch — ProcessFilters auto-fetches the blend list.
   // After this, the API is only called when the user clicks Apply.
   useEffect(() => {
+    if (!dropdownData) return;
     const unitList             = (dropdownData?.common?.units                    ?? []) as { value: string; label: string }[];
     const unitToLineMap        = (dropdownData?.common?.unitToLineMapping         ?? {}) as Record<string, { value: string; label: string }[]>;
     const unitLineToMachineMap = (dropdownData?.common?.unitLineToMachineMapping  ?? {}) as Record<string, { value: string; label: string }[]>;
@@ -375,7 +376,7 @@ const ProcessAnalysis = () => {
     dispatch(resetPageSelections(defaults));
     dispatch(fetchProcessAnalysisData(buildProcessPayload({ ...selections, ...defaults })));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch]);
+  }, [dispatch, dropdownData]);
 
   if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 

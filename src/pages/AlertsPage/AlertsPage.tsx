@@ -170,10 +170,11 @@ const AlertsPage = () => {
   }, [dispatch, selections.period, endDate]);
 
   useEffect(() => {
+    if (!dropdownData) return;
     if (selections.period === "custom" && (!startDate || !endDate)) return;
     dispatch(fetchAlertsData(buildAlertsPayload(selections, filterParam)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, selections.unit, selections.period, selections.dateRangeFrom, selections.dateRangeTo, filterParam, startDate, endDate]);
+  }, [dispatch, dropdownData, selections.unit, selections.period, selections.dateRangeFrom, selections.dateRangeTo, filterParam, startDate, endDate]);
 
   const filtered = useMemo(() => {
     let list = alerts;

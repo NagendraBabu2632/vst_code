@@ -6,7 +6,7 @@ export const EXEC_ENDPOINTS = {
   TREND:             '/executive/trend',
   TOP_CONSUMERS:     '/executive/top-consumers',
   ALERT_SUMMARY:     '/executive/alert-summary',
-  HUMIDITY_MOISTURE: '/executive/humidity-moisture',
+  HUMIDITY_MOISTURE: '/executive/humidity-moisture-temperature',
 } as const;
 
 // A=1, B=2, C=3, Daily(D)=4
