@@ -122,6 +122,7 @@ export const EXEC_MOCK = {
 
   humidityMoisture: {
     humidity: { pmd: 0, smd: 0, total: 0 },
+    temperature: { pmd: 0, smd: 0, total: 0 },
     moisture: [] as Array<{
       machineId: number;
       location: string;

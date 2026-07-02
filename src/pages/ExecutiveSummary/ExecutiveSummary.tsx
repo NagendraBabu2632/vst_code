@@ -21,12 +21,12 @@ import {
 import type { ExecApiPayload } from "@/redux/slices/dropdownSlice";
 import { apiService } from "@/services/api";
 import {
-  Zap, IndianRupee, Gauge, Droplets, Wind,
+  Zap, IndianRupee, Gauge, Droplets, Wind, Thermometer,
   Trophy, TrendingDown, BarChart3, Table2, Factory, Bell,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { EnergyTrendAreaChart } from "../../components/charts/AreaChart/AreaChart";
-import { Top5BarChart, MoistureBarChart, HumidityBarChart } from "../../components/charts/BarChart/BarChart";
+import { Top5BarChart, MoistureBarChart, HumidityBarChart, TemperatureBarChart } from "../../components/charts/BarChart/BarChart";
 
 const MOISTURE_SPEC = { lsl: 11.5, target: 12.5, usl: 13.5 };
 
@@ -227,8 +227,8 @@ const ExecutiveSummary = () => {
         />
       </div>
 
-      {/* ── KPI Row 2: Utility + Moisture + Humidity ─────────────────────── */}
-      <div className="exec-kpi-grid">
+      {/* ── KPI Row 2: Utility + Moisture + Humidity + Temperature ────────── */}
+      <div className="exec-kpi-grid exec-kpi-grid--5col">
         <KpiCard
           title="Utility Energy"
           value={summaryKpi.utilityKWH.toLocaleString()}
@@ -269,6 +269,20 @@ const ExecutiveSummary = () => {
             </div>
           </div>
           <HumidityBarChart data={humidityMoisture?.humidity} />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="kpi-card"
+        >
+          <div className="exec-card-head">
+            <span className="exec-card-label">Avg Temperature</span>
+            <div className="exec-card-icon-wrap exec-card-icon-wrap--temperature">
+              <Thermometer className="exec-card-icon" />
+            </div>
+          </div>
+          <TemperatureBarChart data={humidityMoisture?.temperature} />
         </motion.div>
       </div>
 

@@ -95,6 +95,7 @@ export interface ExecMoistureItem {
 
 export interface ExecHumidityMoistureData {
   humidity: ExecHumidityData;
+  temperature: ExecHumidityData;
   moisture: ExecMoistureItem[];
 }
 

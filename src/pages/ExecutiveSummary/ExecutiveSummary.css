@@ -54,6 +54,12 @@
   }
 }
 
+@media (min-width: 1024px) {
+  .exec-kpi-grid--5col {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
 .exec-kpi-card-wide {
   grid-column: span 1;
   cursor: pointer;
@@ -64,6 +70,11 @@
 @media (min-width: 640px) {
   .exec-kpi-card-wide {
     grid-column: span 2;
+  }
+}
+@media (min-width: 1024px) {
+  .exec-kpi-grid--5col .exec-kpi-card-wide {
+    grid-column: span 3;
   }
 }
 .exec-kpi-card-wide:hover {
@@ -114,6 +125,12 @@
   background: color-mix(in srgb, var(--chart-humidity, hsl(200 98% 39%)) 12%, transparent);
 }
 .exec-card-icon-wrap--humidity .exec-card-icon {
+  color: var(--chart-humidity, hsl(200 98% 39%));
+}
+.exec-card-icon-wrap--temperature {
+  background: color-mix(in srgb, var(--chart-humidity, hsl(200 98% 39%)) 12%, transparent);
+}
+.exec-card-icon-wrap--temperature .exec-card-icon {
   color: var(--chart-humidity, hsl(200 98% 39%));
 }
 .exec-card-icon {

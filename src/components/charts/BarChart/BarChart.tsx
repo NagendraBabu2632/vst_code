@@ -161,13 +161,7 @@ interface MoistureBarChartProps {
 const MOIST_HEIGHT = 118;
 const MOIST_MARGIN = { top: 6, right: 46, bottom: 30, left: 28 };
 
-const getMoistureBarFill = (v: number | null, lsl: number, usl: number): string => {
-  if (v === null) return "hsl(220, 14%, 35%)";
-  if (v < lsl || v > usl) return "hsl(0, 85%, 60%)";
-  const nearBand = (usl - lsl) * 0.15;
-  if (v <= lsl + nearBand || v >= usl - nearBand) return "hsl(45, 95%, 55%)";
-  return "hsl(142, 70%, 45%)";
-};
+const MOISTURE_BAR_FILL = "hsl(200, 98%, 39%)";
 
 export const MoistureBarChart = ({
   data,
@@ -231,12 +225,11 @@ export const MoistureBarChart = ({
             const val  = d.avgMoisture ?? 0;
             const by   = y(val);
             const bh   = Math.max(0, innerH - by);
-            const fill = getMoistureBarFill(d.avgMoisture, lsl, usl);
             return (
               <rect
                 key={d.location}
                 x={bx} y={by} width={bw} height={bh}
-                fill={fill} fillOpacity={d.avgMoisture === null ? 0.25 : 0.88} rx={3}
+                fill={MOISTURE_BAR_FILL} fillOpacity={d.avgMoisture === null ? 0.25 : 0.88} rx={3}
                 onMouseEnter={(e) => showTip(e, d)}
                 onMouseMove={(e) => showTip(e, d)}
                 onMouseLeave={hideTip}
@@ -279,7 +272,7 @@ export const MoistureBarChart = ({
 };
 
 /* ============================================================
- * Humidity Bar Chart — 3 vertical bars: PMD | SMD | Total
+ * Humidity / Temperature Bar Chart — 2 vertical bars: PMD | SMD
  * ========================================================== */
 
 export interface HumidityData {
@@ -288,20 +281,18 @@ export interface HumidityData {
   total: number;
 }
 
-interface HumidityBarChartProps {
+interface PmdSmdBarChartProps {
   data?: HumidityData;
+  colors: [string, string];
+  unitLabel: string;
 }
 
 const HUM_HEIGHT = 120;
 const HUM_MARGIN = { top: 22, right: 6, bottom: 26, left: 30 };
 
-const humBarColors = [
-  "hsl(200 98% 39%)",  // PMD — info blue
-  "hsl(38 92% 48%)",   // SMD — amber
-];
 const humLabels = ["PMD", "SMD"] as const;
 
-export const HumidityBarChart = ({ data }: HumidityBarChartProps) => {
+const PmdSmdBarChart = ({ data, colors, unitLabel }: PmdSmdBarChartProps) => {
   const { ref, width } = useChartSize(300);
 
   // API may return null despite the TypeScript type saying number
@@ -353,7 +344,7 @@ export const HumidityBarChart = ({ data }: HumidityBarChartProps) => {
             const safeVal = val ?? 0;
             const by      = y(safeVal);
             const bh      = val != null ? Math.max(0, innerH - by) : 0;
-            const fill    = humBarColors[i];
+            const fill    = colors[i];
             return (
               <g key={label}>
                 <rect
@@ -380,7 +371,7 @@ export const HumidityBarChart = ({ data }: HumidityBarChartProps) => {
           ))}
 
           {/* Unit label top-right */}
-          <text x={innerW} y={-8} textAnchor="end" fontSize={8} fill={axisStroke}>% RH</text>
+          <text x={innerW} y={-8} textAnchor="end" fontSize={8} fill={axisStroke}>{unitLabel}</text>
 
           {/* X axis + labels */}
           <g transform={`translate(0,${innerH})`}>
@@ -402,6 +393,19 @@ export const HumidityBarChart = ({ data }: HumidityBarChartProps) => {
     </div>
   );
 };
+
+const humColors: [string, string] = [
+  "hsl(200 98% 39%)",  // PMD — info blue
+  "hsl(38 92% 48%)",   // SMD — amber
+];
+
+export const HumidityBarChart = ({ data }: { data?: HumidityData }) => (
+  <PmdSmdBarChart data={data} colors={humColors} unitLabel="% RH" />
+);
+
+export const TemperatureBarChart = ({ data }: { data?: HumidityData }) => (
+  <PmdSmdBarChart data={data} colors={humColors} unitLabel="°C" />
+);
 
 /* ============================================================
  * Asset-wise Energy (horizontal bar)
