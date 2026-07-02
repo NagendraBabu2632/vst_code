@@ -63,9 +63,10 @@ const EnergyMonitoring = () => {
   }, [dispatch, period, endDate]);
 
   useEffect(() => {
+    if (period === "custom" && (!startDate || !endDate)) return;
     dispatch(fetchEnergyMonitoringData(buildEnergyPayload(selections)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, selections.period, selections.dateRangeFrom, selections.dateRangeTo]);
+  }, [dispatch, selections.period, selections.dateRangeFrom, selections.dateRangeTo, startDate, endDate]);
 
   if (error) return <DashboardLayout><div className="page-error">Error: {error}</div></DashboardLayout>;
 

@@ -1,9 +1,5 @@
 /* BlendTrackerPage — table view */
 
-.blt-page {
-  max-width: 80rem;
-}
-
 /* ── Top bar ────────────────────────────────────────────────── */
 .blt-topbar {
   display: flex;

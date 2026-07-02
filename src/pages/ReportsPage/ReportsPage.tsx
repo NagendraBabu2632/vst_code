@@ -142,6 +142,7 @@ const ReportsPage = () => {
 
   // Fetch active report on tab/filter/period/unit change
   useEffect(() => {
+    if (period === "custom" && (!startDate || !endDate)) return;
     const reportName = REPORT_NAME_MAP[reportType];
     if (!reportName || !selections.unit) return;
     const { unit, startDate: sd, endDate: ed } = buildReportsEpochPayload(selections);
@@ -153,10 +154,11 @@ const ReportsPage = () => {
       parameter: filterParam,
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, reportType, selections.unit, selections.period, selections.dateRangeFrom, selections.dateRangeTo, filterParam]);
+  }, [dispatch, reportType, selections.unit, selections.period, selections.dateRangeFrom, selections.dateRangeTo, filterParam, startDate, endDate]);
 
   // Fetch process params report (temperature / humidity / moisture)
   useEffect(() => {
+    if (period === "custom" && (!startDate || !endDate)) return;
     if (reportType !== "process" || !filterParam) return;
     const { startDate: sd, endDate: ed } = buildReportsEpochPayload(selections);
     const isMoisture = filterParam.toLowerCase() === "moisture";
@@ -169,7 +171,7 @@ const ReportsPage = () => {
       dispatch(fetchProcessParamReportData({ parameter: filterParam.toLowerCase(), unit: selections.unit, startDate: sd, endDate: ed }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, reportType, filterParam, selections.unit, selections.machine, selections.period, selections.dateRangeFrom, selections.dateRangeTo]);
+  }, [dispatch, reportType, filterParam, selections.unit, selections.machine, selections.period, selections.dateRangeFrom, selections.dateRangeTo, startDate, endDate]);
 
   const energyTableData = useMemo(() => {
     let data = energyItems.map((item) => ({

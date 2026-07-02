@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import darkLogo from "@/assets/VST_Logo.png";
 import lightLogo from "@/assets/lightthemelogo.png";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks/reduxHooks";
-import { fetchAlertsData, selectActiveAlertCount } from "@/redux/slices/alertsSlice";
+import { fetchAlertsData } from "@/redux/slices/alertsSlice";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -37,7 +37,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const dispatch = useAppDispatch();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const theme        = useAppSelector((s) => s.theme.theme);
-  const activeAlerts = useAppSelector(selectActiveAlertCount);
   const logo         = theme === "dark" ? darkLogo : lightLogo;
   const shouldPollAlerts = ALERTS_POLL_PATHS.includes(location.pathname);
 
@@ -79,9 +78,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <TooltipTrigger asChild>
                 <Link to="/alerts" className="layout__icon-btn" aria-label="Alerts">
                   <Bell />
-                  {activeAlerts > 0 && (
-                    <span className="layout__alert-badge">{activeAlerts > 99 ? "99+" : activeAlerts}</span>
-                  )}
                 </Link>
               </TooltipTrigger>
               <TooltipContent>Alerts</TooltipContent>
